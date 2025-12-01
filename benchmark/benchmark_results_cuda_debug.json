@@ -1,0 +1,38 @@
+{
+  "spcauchy": {
+    "32": {
+      "status": "OK",
+      "time_per_iter": 0.0024288999999953374
+    },
+    "64": {
+      "status": "OK",
+      "time_per_iter": 0.0023131600000169785
+    },
+    "128": {
+      "status": "OK",
+      "time_per_iter": 0.002911380000000463
+    },
+    "256": {
+      "status": "OK",
+      "time_per_iter": 0.002913800000033007
+    }
+  },
+  "vmf": {
+    "32": {
+      "status": "OK",
+      "time_per_iter": 0.010183139999958258
+    },
+    "64": {
+      "status": "OK",
+      "time_per_iter": 0.008469819999982064
+    },
+    "128": {
+      "status": "FAIL",
+      "time_per_iter": null
+    },
+    "256": {
+      "status": "FAIL",
+      "time_per_iter": null
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "spcauchy": {
+    "8": {
+      "status": "OK",
+      "time_per_iter": 0.002319804000005661
+    },
+    "16": {
+      "status": "OK",
+      "time_per_iter": 0.002372104000019135
+    },
+    "32": {
+      "status": "OK",
+      "time_per_iter": 0.0023217840000006617
+    },
+    "64": {
+      "status": "OK",
+      "time_per_iter": 0.002324132000007921
+    },
+    "128": {
+      "status": "OK",
+      "time_per_iter": 0.002840381999994861
+    },
+    "256": {
+      "status": "OK",
+      "time_per_iter": 0.0028420680000067478
+    },
+    "512": {
+      "status": "OK",
+      "time_per_iter": 0.00279944800000294
+    },
+    "1024": {
+      "status": "OK",
+      "time_per_iter": 0.0029494439999893985
+    },
+    "2048": {
+      "status": "OK",
+      "time_per_iter": 0.00394955000001346
+    }
+  },
+  "vmf": {
+    "8": {
+      "status": "OK",
+      "time_per_iter": 0.009168464000003951
+    },
+    "16": {
+      "status": "OK",
+      "time_per_iter": 0.009097897999999986
+    },
+    "32": {
+      "status": "OK",
+      "time_per_iter": 0.010007927999988625
+    },
+    "64": {
+      "status": "OK",
+      "time_per_iter": 0.008176386000004641
+    },
+    "128": {
+      "status": "FAIL",
+      "time_per_iter": null
+    },
+    "256": {
+      "status": "FAIL",
+      "time_per_iter": null
+    },
+    "512": {
+      "status": "FAIL",
+      "time_per_iter": null
+    },
+    "1024": {
+      "status": "FAIL",
+      "time_per_iter": null
+    },
+    "2048": {
+      "status": "FAIL",
+      "time_per_iter": null
+    }
+  }
+}
