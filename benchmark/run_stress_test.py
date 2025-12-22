@@ -9,6 +9,12 @@ from benchmark import vendor_vmf
 from benchmark.vendor_vmf import VonMisesFisher, HypersphericalUniform, kl_vmf_official
 from src.spcauchy import sample_spcauchy
 from src.kl import kl_divergence_spcauchy_combined
+from benchmark.vendor_vmf_robust import (
+    VonMisesFisher as VonMisesFisherRobust,
+    HypersphericalUniform as HypersphericalUniformRobust,
+    kl_vmf_official as kl_vmf_official_robust,
+)
+
 
 
 def maybe_sync(device):
@@ -16,7 +22,12 @@ def maybe_sync(device):
         torch.cuda.synchronize()
 
 
-def time_spcauchy_step(batch_size, dim, device, n_warmup, n_iter):
+def rho_from_kappa_dim(kappa: float, d: int) -> float:
+    m = float(d - 1)
+    return (m + kappa - (m * m + 2.0 * kappa * m) ** 0.5) / kappa
+
+
+def time_spcauchy_step(batch_size, dim, rho_val, device, n_warmup, n_iter):
     """
     Time one spCauchy forward+backward pass for given (batch_size, dim).
     """
@@ -27,7 +38,7 @@ def time_spcauchy_step(batch_size, dim, device, n_warmup, n_iter):
         mu = F.normalize(mu, dim=1)
         rho = torch.full(
             (batch_size, 1),
-            0.7,
+            rho_val,
             device=device,
             requires_grad=True,
         )
@@ -107,6 +118,52 @@ def time_vmf_step(batch_size, dim, device, n_warmup, n_iter, timeout):
         "time_per_iter": sum(results) / len(results),
     }
 
+def time_vmf_robust_step(batch_size, dim, device, n_warmup, n_iter, timeout):
+    results = []
+
+    for step in range(n_warmup + n_iter):
+        loc = torch.randn(batch_size, dim, device=device, requires_grad=True)
+        loc = F.normalize(loc, dim=1)
+        kappa = torch.full(
+            (batch_size, 1),
+            10.0,
+            device=device,
+            requires_grad=True,
+        )
+
+        vmf = VonMisesFisherRobust(loc, kappa)
+        hyu = HypersphericalUniformRobust(dim - 1, device=device)
+
+        maybe_sync(device)
+        t0 = time.perf_counter()
+
+        try:
+            z = vmf.rsample()
+            kl = kl_vmf_official_robust(vmf, hyu)
+            loss = z.sum() + kl.sum()
+            loss.backward()
+        except RuntimeError as e:
+            print(f"vMF(robust) RuntimeError at d={dim}: {e}")
+            return {"status": "FAIL", "time_per_iter": None}
+
+        maybe_sync(device)
+        t1 = time.perf_counter()
+        dt = t1 - t0
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            print(f"vMF(robust) NaN/Inf at d={dim}")
+            return {"status": "FAIL", "time_per_iter": None}
+
+        if dt > timeout:
+            print(f"vMF(robust) TIMEOUT at d={dim}: {dt:.3f}s per iter")
+            return {"status": "TIMEOUT", "time_per_iter": dt}
+
+        if step >= n_warmup:
+            results.append(dt)
+
+    return {"status": "OK", "time_per_iter": sum(results) / len(results)}
+
+
 
 def run_stress_test(
     dims,
@@ -131,14 +188,15 @@ def run_stress_test(
     print(f"Batch size: {batch_size}")
     print(f"Warmup iters: {n_warmup}, measured iters: {n_iter}\n")
 
-    all_results = {"spcauchy": {}, "vmf": {}}
+    all_results = {"spcauchy": {}, "vmf": {}, "vmf_robust": {}}
 
     for d in dims:
         print(f"\n=== Dimension d={d} ===")
 
         # spCauchy
         print("  [spCauchy] benchmarking...")
-        res_spc = time_spcauchy_step(batch_size, d, device, n_warmup, n_iter)
+        rho_val = float(rho_from_kappa_dim(10.0, d))
+        res_spc = time_spcauchy_step(batch_size, d, rho_val, device, n_warmup, n_iter)
         all_results["spcauchy"][str(d)] = res_spc
         print(f"    status={res_spc['status']}, time/iter={res_spc['time_per_iter']}")
 
@@ -147,6 +205,13 @@ def run_stress_test(
         res_vmf = time_vmf_step(batch_size, d, device, n_warmup, n_iter, timeout)
         all_results["vmf"][str(d)] = res_vmf
         print(f"    status={res_vmf['status']}, time/iter={res_vmf['time_per_iter']}")
+
+        print("  [vMF_robust] benchmarking...")
+        res_vmf_r = time_vmf_robust_step(batch_size, d, device, n_warmup, n_iter, timeout)
+        all_results["vmf_robust"][str(d)] = res_vmf_r
+        print(f"    status={res_vmf_r['status']}, time/iter={res_vmf_r['time_per_iter']}")
+
+
 
     with open(out_path, "w") as f:
         json.dump(all_results, f, indent=2)

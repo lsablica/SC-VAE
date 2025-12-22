@@ -2,29 +2,29 @@
   "spcauchy": {
     "32": {
       "status": "OK",
-      "time_per_iter": 0.0024288999999953374
+      "time_per_iter": 0.0022047200007364156
     },
     "64": {
       "status": "OK",
-      "time_per_iter": 0.0023131600000169785
+      "time_per_iter": 0.002339420000134851
     },
     "128": {
       "status": "OK",
-      "time_per_iter": 0.002911380000000463
+      "time_per_iter": 0.002711359999739216
     },
     "256": {
       "status": "OK",
-      "time_per_iter": 0.002913800000033007
+      "time_per_iter": 0.0027063400000770345
     }
   },
   "vmf": {
     "32": {
       "status": "OK",
-      "time_per_iter": 0.010183139999958258
+      "time_per_iter": 0.010128820000318228
     },
     "64": {
       "status": "OK",
-      "time_per_iter": 0.008469819999982064
+      "time_per_iter": 0.008607640000263928
     },
     "128": {
       "status": "FAIL",
@@ -33,6 +33,24 @@
     "256": {
       "status": "FAIL",
       "time_per_iter": null
+    }
+  },
+  "vmf_robust": {
+    "32": {
+      "status": "OK",
+      "time_per_iter": 0.007387300000118557
+    },
+    "64": {
+      "status": "OK",
+      "time_per_iter": 0.009430219999921973
+    },
+    "128": {
+      "status": "OK",
+      "time_per_iter": 0.008725799999956508
+    },
+    "256": {
+      "status": "OK",
+      "time_per_iter": 0.009132780000072671
     }
   }
 }

@@ -2,57 +2,57 @@
   "spcauchy": {
     "8": {
       "status": "OK",
-      "time_per_iter": 0.0012823320000029525
+      "time_per_iter": 0.0007289039998795488
     },
     "16": {
       "status": "OK",
-      "time_per_iter": 0.0013465399999995499
+      "time_per_iter": 0.0008549079999284004
     },
     "32": {
       "status": "OK",
-      "time_per_iter": 0.0012779360000013185
+      "time_per_iter": 0.0008148540000547655
     },
     "64": {
       "status": "OK",
-      "time_per_iter": 0.0015135920000057012
+      "time_per_iter": 0.0009057320000283652
     },
     "128": {
       "status": "OK",
-      "time_per_iter": 0.0019600940000032096
+      "time_per_iter": 0.0011313879999579513
     },
     "256": {
       "status": "OK",
-      "time_per_iter": 0.002498065999991468
+      "time_per_iter": 0.001260388000155217
     },
     "512": {
       "status": "OK",
-      "time_per_iter": 0.0027633580000087934
+      "time_per_iter": 0.0015642180000577355
     },
     "1024": {
       "status": "OK",
-      "time_per_iter": 0.0032587980000016612
+      "time_per_iter": 0.002117803999972239
     },
     "2048": {
       "status": "OK",
-      "time_per_iter": 0.004076149999998506
+      "time_per_iter": 0.002842653999905451
     }
   },
   "vmf": {
     "8": {
       "status": "OK",
-      "time_per_iter": 0.0025340659999892523
+      "time_per_iter": 0.002569110000040382
     },
     "16": {
       "status": "OK",
-      "time_per_iter": 0.002675329999999576
+      "time_per_iter": 0.002592901999960304
     },
     "32": {
       "status": "OK",
-      "time_per_iter": 0.002796888000002582
+      "time_per_iter": 0.00269138199986628
     },
     "64": {
       "status": "OK",
-      "time_per_iter": 0.002474837999998272
+      "time_per_iter": 0.00228036799995607
     },
     "128": {
       "status": "FAIL",
@@ -73,6 +73,44 @@
     "2048": {
       "status": "FAIL",
       "time_per_iter": null
+    }
+  },
+  "vmf_robust": {
+    "8": {
+      "status": "OK",
+      "time_per_iter": 0.002435928000086278
+    },
+    "16": {
+      "status": "OK",
+      "time_per_iter": 0.002580521999989287
+    },
+    "32": {
+      "status": "OK",
+      "time_per_iter": 0.0026344560000870843
+    },
+    "64": {
+      "status": "OK",
+      "time_per_iter": 0.0024301959999866087
+    },
+    "128": {
+      "status": "OK",
+      "time_per_iter": 0.0024308760001076736
+    },
+    "256": {
+      "status": "OK",
+      "time_per_iter": 0.002772640000002866
+    },
+    "512": {
+      "status": "OK",
+      "time_per_iter": 0.0030260120000093595
+    },
+    "1024": {
+      "status": "OK",
+      "time_per_iter": 0.003386743999944883
+    },
+    "2048": {
+      "status": "OK",
+      "time_per_iter": 0.004280548000097042
     }
   }
 }
