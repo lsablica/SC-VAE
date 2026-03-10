@@ -2,7 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from src.kl import kl_divergence_spcauchy_combined, kl_divergence_normal, kl_divergence_spcauchy
+from src.kl import (
+    canonicalize_spcauchy_kl_approximation,
+    kl_divergence_normal,
+    kl_divergence_spcauchy_combined,
+)
 
 class SpCauchyVAE(nn.Module):
     """
@@ -22,6 +26,9 @@ class SpCauchyVAE(nn.Module):
         self.distribution_type = getattr(config, 'distribution_type', 'spcauchy')
         if self.distribution_type not in ['spcauchy', 'normal']:
             raise ValueError(f"Unsupported distribution type: {self.distribution_type}")
+        self.spcauchy_kl_approximation = canonicalize_spcauchy_kl_approximation(
+            getattr(config, 'spcauchy_kl_approximation', None)
+        )
         
         # Determine input dimensions
         if self.is_image_input:
@@ -395,7 +402,11 @@ class SpCauchyVAE(nn.Module):
         """
         if self.distribution_type == 'spcauchy':
             rho = second_param
-            return kl_divergence_spcauchy_combined(rho, self.latent_dim)
+            return kl_divergence_spcauchy_combined(
+                rho,
+                self.latent_dim,
+                approximation=self.spcauchy_kl_approximation,
+            )
         else:  
             logvar = second_param
             return kl_divergence_normal(mu, logvar)

@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import List, Optional, Union, Literal
 import torch
 
+from src.kl import canonicalize_spcauchy_kl_approximation
+
 @dataclass
 class SpCauchyVAEConfig:
     """Configuration class for SpCauchyVAE hyperparameters"""
@@ -13,6 +15,7 @@ class SpCauchyVAEConfig:
     
     # Distribution type (spcauchy or normal)
     distribution_type: Literal["spcauchy", "normal"] = "spcauchy"
+    spcauchy_kl_approximation: Optional[str] = None
     
     # Encoder/Decoder architecture type
     encoder_type: Literal["mlp", "cnn", "transformer"] = "mlp"
@@ -55,6 +58,7 @@ class SpCauchyVAEConfig:
         latent_dim,
         hidden_dims,
         distribution_type="spcauchy",  # Added parameter
+        spcauchy_kl_approximation=None,
         encoder_type="mlp",
         decoder_type="mlp",
         is_image_input=True,
@@ -73,6 +77,9 @@ class SpCauchyVAEConfig:
         self.latent_dim = latent_dim
         self.hidden_dims = hidden_dims
         self.distribution_type = distribution_type  # Store new parameter
+        self.spcauchy_kl_approximation = canonicalize_spcauchy_kl_approximation(
+            spcauchy_kl_approximation
+        )
         self.encoder_type = encoder_type
         self.decoder_type = decoder_type
         self.is_image_input = is_image_input
