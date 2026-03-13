@@ -6,11 +6,12 @@ import torch
 
 
 SPCAUCHY_KL_APPROXIMATION_ALIASES = {
-    "dynamic": "weighted",
-    "dynamic_weight": "weighted",
-    "dynamic_weighted": "weighted",
+    "dynamic": "hybrid",
+    "dynamic_weight": "hybrid",
+    "dynamic_weighted": "hybrid",
+    "weighted": "hybrid",
 }
-SPCAUCHY_KL_APPROXIMATION_MODES = {"midpoint", "weighted"}
+SPCAUCHY_KL_APPROXIMATION_MODES = {"midpoint", "laplace", "hybrid"}
 SPCAUCHY_RHO_EPS = 1e-3
 
 
@@ -62,14 +63,53 @@ def _get_spcauchy_bracket_terms(z, latent_dim):
     return lower, upper, width
 
 
-def spcauchy_h_approximation(z, latent_dim, approximation="weighted"):
+def _spcauchy_exact_lowd_j(z, latent_dim):
+    """Return the exact low-dimensional J_d(z) core for d = 2, 3, 4, 5."""
+    if latent_dim not in {2, 3, 4, 5}:
+        raise ValueError("Exact low-dimensional formulas are only available for d = 2, 3, 4, 5.")
+
+    eps = z.new_tensor(torch.finfo(z.dtype).eps)
+    z = torch.clamp(z, min=0.0, max=1 - eps)
+    sqrt_one_minus_z = torch.sqrt(torch.clamp(1 - z, min=0.0))
+    log_one_minus_z = torch.log1p(-z)
+    safe_z = torch.where(z.abs() > eps, z, torch.ones_like(z))
+
+    if latent_dim == 2:
+        numerator = 1 + sqrt_one_minus_z
+        denominator = 2 * sqrt_one_minus_z
+        j_exact = 2 * torch.log(numerator / denominator)
+        return torch.where(z.abs() > eps, j_exact, torch.zeros_like(z))
+
+    if latent_dim == 3:
+        j_exact = -1 - log_one_minus_z / safe_z
+        return torch.where(z.abs() > eps, j_exact, torch.zeros_like(z))
+
+    if latent_dim == 4:
+        numerator = 1 + sqrt_one_minus_z
+        denominator = 2 * sqrt_one_minus_z
+        log_term = 2 * torch.log(numerator / denominator)
+        rational_term = ((1 - sqrt_one_minus_z) ** 2) / (2 * (1 + sqrt_one_minus_z) ** 2)
+        j_exact = log_term + rational_term
+        return torch.where(z.abs() > eps, j_exact, torch.zeros_like(z))
+
+    j_exact = 2 / safe_z.square() - 2 / safe_z - z.new_tensor(5.0 / 6.0)
+    j_exact = j_exact + ((2 - 3 * z) / safe_z.pow(3)) * log_one_minus_z
+    return torch.where(z.abs() > eps, j_exact, torch.zeros_like(z))
+
+
+def spcauchy_exact_lowd_h(z, latent_dim):
+    """Return the exact H_d(z) for d = 2, 3, 4, 5."""
+    return _spcauchy_exact_lowd_j(z, latent_dim) + torch.log1p(-z)
+
+
+def spcauchy_h_approximation(z, latent_dim, approximation="hybrid"):
     """
     Approximate the bracketed H_d(z) term from the paper.
 
     Args:
         z (torch.Tensor): z = 4 rho / (1 + rho)^2.
         latent_dim (int): Dimension d of the latent space.
-        approximation (str): One of {'midpoint', 'weighted'}.
+        approximation (str): One of {'midpoint', 'laplace', 'hybrid'}.
 
     Returns:
         torch.Tensor: Approximation of H_d(z) with the same shape as z.
@@ -83,20 +123,21 @@ def spcauchy_h_approximation(z, latent_dim, approximation="weighted"):
     if approximation == "midpoint":
         return 0.5 * (lower + upper)
 
-    z_squared = z.square()
-    a_star = 1 / (16 * latent_dim * width) - 1
-    alpha_star = ((1 - z_squared) / (1 + a_star * z_squared)).square()
-    return lower + width * alpha_star
+    if approximation == "hybrid" and latent_dim in {2, 3, 4, 5}:
+        return spcauchy_exact_lowd_h(z, latent_dim)
+
+    laplace_weight = (z / (2 - z)).square()
+    return upper - width * laplace_weight
 
 
-def kl_divergence_spcauchy_approx(rho, latent_dim, approximation="weighted"):
+def kl_divergence_spcauchy_approx(rho, latent_dim, approximation="hybrid"):
     """
     Approximate the spherical Cauchy KL divergence with a closed-form bracket surrogate.
 
     Args:
         rho (torch.Tensor): Concentration parameter of shape (batch_size, 1).
         latent_dim (int): Dimension d of the latent space.
-        approximation (str): One of {'midpoint', 'weighted'}.
+        approximation (str): One of {'midpoint', 'laplace', 'hybrid'}.
 
     Returns:
         torch.Tensor: Approximate KL divergence of shape (batch_size,).
@@ -109,6 +150,45 @@ def kl_divergence_spcauchy_approx(rho, latent_dim, approximation="weighted"):
     h_approx = spcauchy_h_approximation(z, latent_dim, approximation=approximation)
     kl = (latent_dim - 1) * (h_approx - 0.5 * torch.log1p(-z))
     return kl.squeeze(-1)
+
+
+def kl_divergence_spcauchy_reference(rho, latent_dim, k_terms=None, n_nodes=None):
+    """
+    Evaluate a high-accuracy reference KL without using the production "combined" shortcut.
+
+    For d = 2, 3, 4, 5 this uses the exact closed forms from the writeup. For d >= 6 it
+    uses the power series for low concentration and high-order Gauss-Legendre quadrature
+    elsewhere.
+    """
+    if latent_dim in {2, 3, 4, 5}:
+        return kl_divergence_spcauchy_approx(rho, latent_dim, approximation="hybrid")
+
+    rho, _ = _prepare_spcauchy_inputs(rho)
+    reference = torch.empty(rho.shape[0], dtype=rho.dtype, device=rho.device)
+
+    if k_terms is None:
+        k_terms = max(latent_dim * 20, 4000)
+    if n_nodes is None:
+        n_nodes = 2000
+
+    series_mask = rho.squeeze(-1) <= 0.6
+    quadrature_mask = ~series_mask
+
+    if series_mask.any():
+        reference[series_mask] = kl_divergence_spcauchy(
+            rho[series_mask],
+            latent_dim,
+            k_terms=k_terms,
+        )
+
+    if quadrature_mask.any():
+        reference[quadrature_mask] = kl_divergence_spcauchy2(
+            rho[quadrature_mask],
+            latent_dim,
+            n_nodes=n_nodes,
+        )
+
+    return reference
 
 
 @functools.lru_cache(maxsize=32)
@@ -244,8 +324,8 @@ def kl_divergence_spcauchy_combined(rho, latent_dim, n_nodes=None, approximation
     Compute the spherical Cauchy KL divergence with either the exact or surrogate path.
 
     By default this keeps the current exact behavior: quadrature for moderate rho and
-    the asymptotic form for large rho. Setting ``approximation`` to ``"midpoint"`` or
-    ``"weighted"`` switches to the closed-form bracket surrogates from the paper.
+    the asymptotic form for large rho. Setting ``approximation`` to ``"midpoint"``,
+    ``"laplace"``, or ``"hybrid"`` switches to the closed-form surrogates from the paper.
 
     Args:
         rho (torch.Tensor): Concentration parameter of shape (batch_size, 1).

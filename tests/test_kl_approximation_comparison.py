@@ -19,6 +19,7 @@ from src.kl import (
     kl_divergence_spcauchy_approx,
     kl_divergence_spcauchy_asympt,
     kl_divergence_spcauchy_combined,
+    kl_divergence_spcauchy_reference,
 )
 
 
@@ -42,7 +43,7 @@ def timed_evaluation(fn, rho_tensor, device):
 
 
 def summarize_dimension(dimension, rho_values, results, timings, output_dir):
-    reference = results["combined_exact"]
+    reference = results["reference"]
 
     print(f"\nDimension d={dimension}")
     print(f"{'Method':<16} {'Time (ms)':>12} {'Mean Abs Err':>14} {'Max Abs Err':>14} {'Mean Rel Err':>14} {'Max Rel Err':>14}")
@@ -58,10 +59,10 @@ def summarize_dimension(dimension, rho_values, results, timings, output_dir):
         )
 
     figure, (ax_values, ax_errors) = plt.subplots(1, 2, figsize=(14, 5))
-    ax_values.plot(rho_values, reference, label="combined_exact", linewidth=2.5, color="black")
+    ax_values.plot(rho_values, reference, label="reference", linewidth=2.5, color="black")
 
     for method_name, values in results.items():
-        if method_name == "combined_exact":
+        if method_name == "reference":
             continue
         ax_values.plot(rho_values, values, label=method_name)
 
@@ -72,12 +73,12 @@ def summarize_dimension(dimension, rho_values, results, timings, output_dir):
     ax_values.legend()
 
     for method_name, values in results.items():
-        if method_name == "combined_exact":
+        if method_name == "reference":
             continue
         rel_error = np.abs(values - reference) / np.maximum(np.abs(reference), 1e-10)
         ax_errors.semilogy(rho_values, rel_error, label=method_name)
 
-    ax_errors.set_title(f"Relative error vs combined exact (d={dimension})")
+    ax_errors.set_title(f"Relative error vs reference (d={dimension})")
     ax_errors.set_xlabel("rho")
     ax_errors.set_ylabel("relative error")
     ax_errors.grid(True, which="both")
@@ -100,7 +101,7 @@ def run_kl_approximation_comparison(
         dimensions = [3, 5, 10, 20, 100]
 
     rho_values = build_rho_grid(num_points)
-    rho_tensor = torch.tensor(rho_values, dtype=torch.float32, device=device).view(-1, 1)
+    rho_tensor = torch.tensor(rho_values, dtype=torch.float64, device=device).view(-1, 1)
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     output_dir = output_dir or os.path.join(repo_root, "figures")
@@ -108,6 +109,12 @@ def run_kl_approximation_comparison(
 
     for dimension in dimensions:
         method_specs = {
+            "reference": lambda tensor: kl_divergence_spcauchy_reference(
+                tensor,
+                dimension,
+                k_terms=max(k_terms, 4000),
+                n_nodes=max(n_nodes, 2000),
+            ),
             "combined_exact": lambda tensor: kl_divergence_spcauchy_combined(
                 tensor,
                 dimension,
@@ -129,10 +136,15 @@ def run_kl_approximation_comparison(
                 dimension,
                 approximation="midpoint",
             ),
-            "weighted": lambda tensor: kl_divergence_spcauchy_approx(
+            "laplace": lambda tensor: kl_divergence_spcauchy_approx(
                 tensor,
                 dimension,
-                approximation="weighted",
+                approximation="laplace",
+            ),
+            "hybrid": lambda tensor: kl_divergence_spcauchy_approx(
+                tensor,
+                dimension,
+                approximation="hybrid",
             ),
         }
 
