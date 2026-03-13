@@ -1,0 +1,1724 @@
+\documentclass{article}
+
+\usepackage{arxiv}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts,amsthm}    % blackboard math symbols
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[round]{natbib}    
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{bm}
+\usepackage{graphicx}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{prop}{Proposition}
+\DeclareRobustCommand{\citeext}[1]{\citeauthor{#1}~(\citeyear{#1})~\cite{#1}}
+%\newtheorem{corollary}{Corollary}
+%\newtheorem{definition}{Definition}[section]
+
+
+\title{Hyperspherical Variational Autoencoders Using Efficient Spherical Cauchy Distribution}
+
+
+\author{
+  Lukas Sablica \\
+  Institute for Statistics and Mathematics\\
+  Vienna University of Economics and Business\\
+  Austria\\
+  \url{https://www.wu.ac.at/en/statmath}\\
+  ORCiD: 0000-0001-9166-4563\\
+  \href{mailto:Lukas.Sablica@wu.ac.at}{\nolinkurl{Lukas.Sablica@wu.ac.at}}
+   \And
+ Kurt Hornik\\
+Institute for Statistics and Mathematics\\
+Vienna University of Economics and Business\\
+Austria\\
+\url{https://www.wu.ac.at/en/statmath}\\
+ORCiD: 0000-0003-4198-9911\\
+\href{mailto:Kurt.Hornik@wu.ac.at}{\nolinkurl{Kurt.Hornik@wu.ac.at}}
+}
+
+% Uncomment to remove the date
+%\date{}
+
+% Uncomment to override  the `A preprint' in the header
+%\renewcommand{\headeright}{Research Article}
+%\renewcommand{\undertitle}{Research Article}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We propose a variational autoencoder (VAE) architecture that employs a spherical Cauchy (spCauchy) latent distribution. Unlike traditional Gaussian latent spaces or the widely used von Mises-Fisher (vMF) distribution, spCauchy provides a natural hyperspherical representation of latent variables with heavy tails that prevent over-regularization and promote efficient use of the latent space. On the theoretical side, we demonstrate that the spCauchy distribution recovers the desirable local curvature of the vMF model. Specifically, we derive a parameter mapping that aligns their tangent-space geometry in the high-concentration limit. At the same time, spCauchy avoids the implementation overhead of vMF models that require high-order modified Bessel function evaluations and related special-function machinery. The reparameterization trick is implemented via a fully differentiable Möbius transformation from the uniform measure on the sphere, and the Kullback-Leibler divergence to a uniform prior admits both a rapidly convergent power-series representation and a numerically stable quadrature-based form with an accurate asymptotic expansion for high concentration, all of which can be evaluated without special-function underflow or overflow. We further establish monotonicity of the concentration-dependent KL core term and derive tight analytic brackets with closed-form surrogates and explicit error control, enabling stable approximation in extreme concentration regimes. A dedicated stress-test benchmark confirms that the resulting objective remains stable and is consistently faster to evaluate than a reference vMF baseline on both CPU and GPU, while our applications to image and molecular data demonstrate that spCauchy-VAEs provide a robust and scalable alternative for high-dimensional generative modeling on hyperspherical latent spaces.
+\end{abstract}
+
+
+
+% keywords can be removed
+\keywords{Variational Autoencoders \and Spherical Cauchy Distribution \and Hyperspherical Latent Spaces \and Heavy-Tailed \and Numerical Stability \and Efficient Sampling \and KL Divergence Approximation \and Scalable Generative Models}
+
+
+
+\section{Introduction}
+
+In many modern applications, ranging from natural language processing and computer vision to geospatial analysis and robotics, the underlying data exhibit intrinsic directional, cyclic, or rotational structures. For example, word embeddings, image features, and sensor readings related to orientation or angular motion naturally reside on or near a spherical manifold \citep{scott2021mises,scott2022empirical,circlus}. When the latent space of a generative model reflects this underlying geometry, the resulting representations are more faithful, interpretable, and often yield improved performance on downstream tasks.
+
+Traditional variational autoencoders (VAEs) predominantly utilize Gaussian latent spaces because of their mathematical convenience and tractable training objectives. However, Gaussian distributions do not naturally capture the cyclic or directional aspects of many datasets. In high-dimensional spaces, the Gaussian measure also concentrates on a thin shell, which may not coincide with the intrinsic geometry of the data. These issues can lead to phenomena such as posterior collapse or latent representations that fail to capture essential angular relationships \citep{davidson2018hyperspherical}.
+
+To address these shortcomings, hyperspherical latent spaces have gained attention. By constraining the latent codes to lie on the surface of a unit sphere, one inherently preserves the semantic structure present in the data. One common approach has been to use the von Mises-Fisher (vMF) distribution as the latent distribution \citep{davidson2018hyperspherical,xu2018spherical}. The vMF distribution arises naturally as the maximum entropy distribution on the hypersphere given a fixed mean direction, and has been successfully used for clustering high-dimensional directional data~\citep{banerjee2005vmf}, further reinforcing its suitability for modeling angular latent structure. Despite its intuitive appeal for modeling directions, implementing vMF-based latent layers typically requires careful numerical treatment because the normalization constant and entropy/KL terms involve high-order modified Bessel functions. Accurate and stable schemes for evaluating the required Bessel ratios are available (e.g., via Perron continued fractions, see \cite{hornik2014maximum}), but they add implementation complexity and can complicate purely accelerator-based pipelines.
+
+Our work seeks to overcome these limitations by introducing a novel alternative, the spherical Cauchy (spCauchy) distribution \citep{spCauchy}. The spCauchy distribution is defined directly on the unit sphere and is obtained by applying a Möbius transformation to uniformly distributed points on the sphere. This reparameterization trick is simple yet powerful, it circumvents the need for rejection sampling, resulting in a latent model that is both computationally efficient and numerically stable. Moreover, the KL divergence is expressed as a rapidly converging power series, avoiding the need for function ratios that can suffer from numerical underflow or overflow.
+
+Crucially, under stereographic projection, the spherical Cauchy distribution maps exactly to a multivariate Student's $t$ distribution with $d$ degrees of freedom \citep{spCauchy}. Consequently, our spCauchy-VAE brings the widely popular Student-$t$ latent idea to hyperspherical latent spaces, and we provide the corresponding reparameterization and KL expressions directly on $S^{d-1}$. At the same time, we show that in the high-concentration regime the spherical Cauchy and von Mises-Fisher distributions share the same local Gaussian geometry in the tangent space when their concentration parameters are matched appropriately, so that spCauchy retains the desirable local behaviour of vMF while remaining globally heavy-tailed.
+
+Key advantages of our approach include:
+\begin{itemize}
+    \item \textbf{Geometric Consistency}: By operating on a hyperspherical latent space, the model naturally respects and preserves the directional and cyclic structure inherent in the data.
+    \item \textbf{Numerical Stability}: Avoiding ratios of Bessel functions and using hypergeometric series with small arguments leads to more robust computations, particularly when dealing with high-dimensional latent spaces.
+    \item \textbf{Efficient Sampling}: The sampling process leverages a Möbius transformation applied to uniformly distributed samples on the sphere, making it both straightforward and computationally efficient.
+    \item \textbf{Analytical Tractability}: The KL core admits monotonicity and refined analytic brackets, yielding closed-form surrogates with explicit approximation guarantees in high-concentration regimes.
+\end{itemize}
+
+
+In summary, the limitations of Gaussian and vMF latent spaces motivate our exploration of the spherical Cauchy distribution as a superior alternative for modeling hyperspherical latent spaces. This framework is not only more aligned with the intrinsic geometry of many types of data but also enables stable, efficient, and interpretable learning.
+
+
+\section{Related Work}
+
+Variational Autoencoders (VAEs) are widely used generative models that learn a low-dimensional latent representation of data while ensuring efficient generation and reconstruction. Traditionally, VAEs employ a Gaussian distribution, which provides mathematical convenience but often fails to capture the true structure of the latent space, especially when dealing with directional or cyclic data \citep{davidson2018hyperspherical}. The mismatch between the Gaussian distribution and the true latent distribution has been shown to cause posterior collapse \citep{xu2018spherical}, inefficient latent utilization \citep{kim2024t3vae}, and difficulties in preserving crucial data structures \citep{tomczak2018vampprior}.
+
+To address these shortcomings, researchers have explored hyperspherical latent spaces using the von Mises-Fisher (vMF) distribution \citep{davidson2018hyperspherical}. The vMF aligns better with the geometric structure of directional data and has been shown to mitigate posterior collapse in text VAEs \citep{xu2018spherical}. However, training VAEs with a vMF introduces numerical challenges due to the intractability of its normalization constant, which involves modified Bessel functions \citep{davidson2019increasing}. Additionally, the vMF distribution imposes a unimodal latent structure that can be restrictive in high dimensions \citep{davidson2019increasing}.
+
+Alternative non-Gaussian distributions have been investigated to improve expressivity and robustness in VAEs. Heavy-tailed posteriors, such as the Student’s t-distribution, have been proposed to address over-regularization issues in Gaussian VAEs \citep{kim2024t3vae}. By allowing greater variance in the latent space, these distributions preserve more meaningful structure and prevent the latent collapse observed in standard VAEs. Heavy-tailed latents have also been explored in adversarial generative modeling, for instance, the EV-GAN architecture employs extreme-value distributed latents to better capture tail events~\citep{allouche2023evgan}, underscoring the benefits of non-Gaussian and heavy-tailed priors for complex generative tasks. Other methods involve learning more flexible priors, such as the VampPrior, which represents the latent prior as a mixture of learned approximate posteriors \citep{tomczak2018vampprior}. While effective, such methods introduce additional computational complexity and require careful tuning. Orthogonally, improvements to the training objective itself-such as replacing the standard KL divergence with generalized $\alpha$-divergences can enhance flexibility and inference robustness~\citep{daudel2023alpha}. These divergence-based strategies offer a complementary perspective to improving expressiveness in VAEs.
+
+
+Recently, the spherical Cauchy (spCauchy) distribution \citep{spCauchy} has emerged as a promising alternative for hyperspherical VAEs. The spCauchy distribution retains the benefits of a hyperspherical latent space while avoiding reliance on Bessel-function evaluations and associated special-function routines. Unlike vMF, spCauchy has a simple closed-form normalization constant and does not require Bessel function evaluations, making it computationally more efficient. Additionally, its heavy-tailed nature provides improved robustness against over-regularization, ensuring better latent utilization \citep{spCauchy}. Given these advantages, we propose integrating the spCauchy distribution into the VAE framework, providing a more stable and theoretically grounded approach for modeling hyperspherical latent spaces.
+
+Our approach builds upon prior work in hyperspherical VAEs while addressing their key limitations. By leveraging the spCauchy distribution, we improve numerical stability, simplify KL divergence computation, and enhance the flexibility of the latent space. In addition, we provide new monotonicity and bracket-tightness results for the KL core term, which yield practical approximation rules with explicit error control. The proposed spCauchy-VAE offers a novel and effective alternative for generative modeling.
+
+
+\section{Variational Autoencoders and the spCauchy Approach}
+
+In this section, we review the basic framework of variational autoencoders (VAEs), outline the components of the VAE loss function, introduce the spherical Cauchy (spCauchy) distribution, and explain how the spCauchy model is seamlessly integrated into the VAE framework.
+
+
+\subsection{Variational Autoencoders and the Loss Function}
+
+Variational autoencoders (VAEs) are a class of generative models that learn a low-dimensional latent representation of the input data. A typical VAE consists of two main components:
+
+\begin{enumerate}
+    \item \textbf{Encoder (Inference Model)}:  
+    The encoder maps an input \( x \) from the data space \(\mathbb{R}^N\) to a latent variable \( z \) in a lower-dimensional space \(\mathbb{R}^d\). In standard VAEs, the encoder outputs the parameters of a latent Gaussian distribution (typically a mean \(\mu\) and a diagonal covariance \(\sigma^2\)). This distribution is denoted as \(q(z \mid x)\).
+
+    \item \textbf{Decoder (Generative Model)}:  
+    The decoder maps latent samples \( z \) back to the data space to reconstruct the input. The reconstruction is denoted as \(\hat{x}\), and the likelihood is modeled as \(p(x \mid z)\).
+\end{enumerate}
+
+
+The VAE is trained by maximizing a lower bound on the data log-likelihood. This is equivalent to minimizing the following loss function
+\[
+\mathcal{L}(x) = \underbrace{\mathbb{E}_{q(z \mid x)}\left[\ell(x, \hat{x})\right]}_{\text{Reconstruction Loss}} + \underbrace{\mathrm{KL}\Bigl(q(z \mid x) \| p(z)\Bigr)}_{\text{KL Divergence}},
+\]
+where
+\(\ell(x, \hat{x})\) is a reconstruction loss (e.g., mean squared error or cross-entropy) and \(\mathrm{KL}(q(z \mid x) \| p(z))\) measures the divergence between the approximate posterior \(q(z \mid x)\) and the prior \(p(z)\).
+
+A key component in VAEs is the reparameterization trick, which allows for backpropagation through the stochastic sampling step. In the standard Gaussian VAE, a latent sample is generated by
+\[
+z = \mu + \sigma \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0,I),
+\]
+ensuring that the sample \(z\) is a differentiable function of \(\mu\) and \(\sigma\), which enables efficient gradient-based optimization. However, when direct rejection sampling is the only feasible way to sample from a given distribution, applying the reparameterization trick becomes significantly more challenging. Methods such as those proposed by \cite{Naesseth} introduce reparameterization gradients through acceptance-rejection sampling algorithms, allowing backpropagation through non-differentiable sampling procedures. While effective, these methods introduce additional computational overhead and numerical complexities, making them less practical for large-scale applications or high-dimensional latent spaces. 
+
+In contrast, the spherical Cauchy (spCauchy) distribution offers an efficient reparameterization strategy without reliance on rejection sampling. By leveraging Möbius transformations applied to uniform samples from the hypersphere, spCauchy enables a fully differentiable and numerically stable sampling process. This provides a significant advantage over distributions like the von Mises-Fisher (vMF), where rejection sampling is often required, leading to potential inefficiencies and instability in training. 
+
+\subsection{The Spherical Cauchy Distribution}
+
+In our approach, we aim to better capture the geometry of directional or cyclic data by embedding the latent space on a sphere. To this end, we replace the Gaussian (or vMF) latent distribution with the spherical Cauchy (spCauchy) distribution.
+
+\subsubsection{Definition and Sampling}
+
+Let \( S^{d-1} = \{ x \in \mathbb{R}^d : \|x\| = 1 \} \), where \( \| \cdot \| \) denotes the Euclidean norm, represent the unit sphere in \( \mathbb{R}^d \). The density of the spherical Cauchy distribution with parameters \( 0 \leq \rho < 1 \) and \( \mu \in S^{d-1} \) with respect to the uniform distribution on the unit sphere is given by
+
+\[
+\mathrm{spCauchy}_d(x | \mu, \rho) = \left(\frac{1 - \rho^2}{\| x - \rho \mu \|^{2}}\right)^{d-1}, \quad x \in S^{d-1}.
+\]
+
+For \( \rho = 0 \), the distribution reduces to the uniform distribution on the sphere, and as \( \rho \to 1^- \), it tends toward the Dirac distribution centered at \( \mu \).
+
+A compelling theoretical property of the spherical Cauchy distribution is its stereographic duality. \cite{spCauchy} proved that under the stereographic projection, the spherical Cauchy distribution maps exactly to a multivariate $t$-distribution with $d$ degrees of freedom. This result establishes that our choice of latent prior is the exact hyperspherical analogue of the robust Student's $t$-distribution used in Euclidean VAEs. Consequently, the spCauchy-VAE naturally inherits the heavy-tailed robustness of its Euclidean counterpart while respecting the compact topology of the hypersphere, providing a geometrically principled foundation for the model.
+
+The spherical Cauchy distribution offers several advantages over the von Mises-Fisher (vMF) distribution. Its heavier tails make it particularly well-suited for capturing large deviations and outliers, similar to how the Cauchy and Student-\(t\) distributions function in Euclidean space. Additionally, it is significantly simpler and more computationally efficient to evaluate on modern accelerators such as GPUs. Unlike vMF, which requires computing normalization constants that must be sequentially evaluated and can hinder parallel processing, the density evaluation for the spherical Cauchy distribution primarily involves matrix operations, such as norms and matrix multiplications, that are highly optimized for GPU architectures. This enables efficient and scalable implementation of hyperspherical clustering, making the spherical Cauchy distribution particularly advantageous for large-scale data processing tasks.
+
+A key feature of the spCauchy distribution is its efficient and differentiable sampling procedure, which provides the basis for the reparameterization trick in our VAE. Samples are generated by first drawing a point uniformly from the sphere and then applying a deterministic Möbius transformation \citep{spCauchy}. This transformation, parameterized by the latent mean \(\mu\) and concentration \(\rho\), warps the uniform sample to follow the spCauchy distribution. As this entire process is differentiable, it allows for efficient gradient-based training without requiring rejection sampling. The full mathematical details of this reparameterization are provided in Section~\ref{repar}.
+
+\begin{figure}[ht]
+\includegraphics[width = 8.3cm]{vMF15.png}%
+\includegraphics[width = 8.3cm]{spcauchy0692.png}\\
+\centerline{\footnotesize\hbox to 0.5\textwidth{\hfil
+(a) vMF  $\kappa = 15$ \hfil}\hbox to 0.5\textwidth{\hfil
+(b) spCauchy $\rho = 0.692$ \hfil}}
+\caption{Random draws from vMF distribution and spherical Cauchy distribution  with $d=3$ and concentration parameters selected to match the maximum probabilities}\label{samplesfig}
+\end{figure}
+\noindent
+
+\subsubsection{KL Divergence Evaluation}
+
+A key advantage of the spCauchy distribution is that its KL divergence with respect to the uniform prior on the sphere admits a stable and computationally efficient representation. Unlike the von Mises-Fisher case, which relies on modified Bessel functions and their ratios (typically evaluated using dedicated numerical schemes), our approach avoids this special-function machinery. In what follows, it will be convenient to write
+\[
+    z(\rho) = \frac{4\rho}{(1 + \rho)^2}.
+\]
+It can easily be seen that $1 - z(\rho) = \left(\frac{1-\rho}{1+\rho}\right)^2$, and that as $\rho$ goes from $0$ to $1$, $z(\rho)$ increases from $0$ to $1$. To formally state the KL divergence, let \(\mathrm{spCauchy}_d(x | \mu, \rho)\) denote the spherical Cauchy distribution on \(S^{d-1}\) with parameters \(\mu\) and \(\rho\), and let \(\upsilon_d\) denote the uniform distribution on \(S^{d-1}\).
+
+\begin{theorem}\label{t1}
+The Kullback-Leibler (KL) divergence between the spherical Cauchy distribution \(\mathrm{spCauchy}_d(x | \mu, \rho)\) and the uniform distribution \(\upsilon_d\) on the sphere \(S^{d-1}\) is given by the rapidly converging series:
+\begin{equation}
+\mathrm{KL}(\mathrm{spCauchy}_d(x | \mu, \rho) \| \upsilon_d) = (d-1) \log \left( \frac{1-\rho}{1+\rho} \right) + (d-1)\left(\frac{1-\rho}{1+\rho}\right)^{d-1} \sum_{k=0}^{\infty} \frac{\left( \frac{d-1}{2} \right)_k}{k!} z(\rho)^k \Bigl[ \psi(d-1+k) - \psi(d-1) \Bigr].
+\end{equation}
+Here, \((a)_k\) is the Pochhammer symbol (rising factorial)~\cite[5.2.4]{watson:DLMF} and \(\psi(x)\) is the digamma function, i.e., the logarithmic derivative of the gamma function~\cite[5.2.2]{watson:DLMF}.
+\end{theorem}
+
+The expression in Theorem~\ref{t1} provides a significant advantage over existing hyperspherical VAEs, particularly those based on the von Mises-Fisher (vMF) distribution, where evaluating the KL divergence requires computing ratios of modified Bessel functions, which can suffer from severe numerical instability due to overflow and underflow in their asymptotics. In contrast, the spCauchy KL expression avoids these issues entirely, as it is constructed from a rapidly converging power series with argument \( z(\rho) \in [0,1) \), ensuring stable numerical evaluation across a broad range of dimensions.
+
+While this formula already works well in practice, its numerical evaluation can be challenging in high dimensions. As \( d \to \infty \), the term \(\left((1-\rho)/(1+\rho)\right)^{d-1}\) decays to zero exponentially fast, while the power series component grows rapidly (due to the Pochhammer symbols in its coefficients). Direct computation of their product can therefore suffer from numerical instability, as it involves multiplying a number that may underflow to zero by another that may overflow.
+
+However, crucially, these two effects are designed to counteract each other. The exponential decay of the first term precisely counterbalances the growth of the power series, such that their product remains numerically stable and well-behaved. This key observation allows us to refine the evaluation in two ways.
+
+First, instead of directly computing the sum, we can standardize its elements by factoring out \(\left((1-\rho)/(1+\rho)\right)^{d-1}\) and evaluating the summation in log-space. This prevents numerical instability at large \( d \), improving precision without introducing additional computational overhead.
+
+Second, an even more effective approach is to consolidate the divergent components into a single compact integral, which remains well-behaved even in extreme dimensions. Specifically, we transform the sum into an integral representation that avoids explicit summation and instead allows for efficient numerical evaluation using quadrature methods such as Gauss-Legendre quadrature. This method naturally captures the interplay between the competing terms, ensuring numerical stability without requiring explicit scaling. It reduces the reliance on iterative evaluations and convergence monitoring of special functions, making it computationally efficient. Furthermore, it allows for controlled precision, as quadrature-based evaluations provide an accurate approximation without requiring excessive terms in a series expansion.
+
+In our experimental settings, both approaches provide highly accurate KL divergence computations, even for very high-dimensional latent spaces. However, the integral representation consistently achieves superior numerical stability while maintaining computational efficiency, making it the preferred method when working with large-scale models.
+
+
+\subsection{Integrating spCauchy into the VAE Framework} \label{method}
+
+
+The spCauchy-VAE builds on the standard VAE framework by modifying the latent distribution and the reparameterization trick.
+
+\begin{enumerate}
+    \item \textbf{Encoder Network}:  
+    The encoder network maps an input \(x\) to two outputs:
+    \begin{itemize}
+        \item A latent mean \(\mu \in S^{d-1}\) (obtained by normalizing the encoder’s output vector).
+        \item A concentration parameter \(\rho \in (0,1)\) (obtained by applying a sigmoid to a scalar output).
+    \end{itemize}
+
+    \item \textbf{Differentiable Reparameterization}:  
+    Instead of sampling \(z\) directly from a Gaussian, we sample uniformly from the sphere and then apply the Möbius transformation to obtain a latent code \(z\) from the spCauchy distribution.
+    \[
+    z = \mathrm{Moebius}_S(x, \mu, \rho),
+    \]
+    where \(x\) is a uniform sample on \(S^{d-1}\). This reparameterization is fully differentiable, thereby allowing gradients to propagate through the stochastic sampling step.
+
+    \item \textbf{Decoder Network}:  
+    The decoder reconstructs the input \(x\) from the latent code \(z\) via a standard mapping (e.g., a neural network).
+
+    \item \textbf{Loss Function}:  
+    The overall VAE loss is the sum of the reconstruction loss and the KL divergence. For the spCauchy-VAE, the KL divergence is computed using the closed-form expression (or a rapidly convergent series representation) derived from the hypergeometric function with argument in \((0,1)\).
+\end{enumerate}
+
+
+By merging the spCauchy distribution into the VAE, we achieve a model that aligns the latent space with the natural geometry of latent representations, provides a numerically robust and efficient sampling procedure, and facilitates stable and tractable computation of the KL divergence.
+
+In the following sections, we will detail the mathematical derivation of the spCauchy distribution and validate the approach with experimental results.
+
+\section{Mathematical Details}
+
+In this section we present the mathematical formulation underlying the spCauchy-VAE. We begin by detailing the reparameterization trick and the associated sampling procedure for the spherical Cauchy distribution (Section~\ref{repar}). Next, we establish a local asymptotic equivalence between spCauchy and the von Mises-Fisher (vMF) distribution near the mode, which clarifies how our model relates to existing hyperspherical VAEs (Section~\ref{sec:local-vmf}). We then derive a closed-form, rapidly convergent expression for the Kullback-Leibler (KL) divergence between the spCauchy posterior and the uniform prior on the sphere, together with monotonicity and refined bracket results for its concentration-dependent core term (Section~\ref{KL}). Finally, we show how these components are combined into a unified loss function for the model (Section~\ref{combo}).
+
+All proofs supporting the following results are provided in Appendix~\ref{appen}.
+
+\subsection{Reparameterization Trick and Sampling}\label{repar}
+
+The central idea behind our approach is to generate samples from the spCauchy distribution using a differentiable transformation, which forms the basis of the reparameterization trick. This is achieved in two steps:
+
+\begin{enumerate}
+  \item \textbf{Uniform Sampling on the Sphere}:  
+    We first obtain samples uniformly distributed on the unit sphere \( S^{d-1} \). A common method is to draw samples from a standard multivariate normal distribution and then normalize each sample.
+    \[
+    X \sim \mathcal{N}(0, I_d), \quad x = \frac{X}{\|X\|}.
+    \]
+    In this way, each \( x \) is uniformly distributed on \( S^{d-1} \).
+
+  \item \textbf{Möbius Transformation}:  
+    To ``warp'' the uniform samples into samples that follow the spCauchy distribution, we apply the M\"obius transformation. For a given unit vector \(\mu\) (representing the latent “mean”) and a concentration parameter \(\rho \in [0,1)\), the transformation is defined as
+    \[
+    Y = \mathrm{Moebius}_S(x, \mu, \rho) = (1-\rho^2) \cdot \frac{x + \rho\mu}{1 + 2\rho x^T\mu + \rho^2} + \rho\mu.
+    \]
+    This mapping has the following desirable properties:
+    \begin{itemize}
+        \item When \(\rho=0\), the transformation reduces to the identity so that \(Y = x\), recovering the uniform distribution.
+        \item As \(\rho\) increases, the density of \(Y\) becomes increasingly concentrated near \(\mu\).
+    \end{itemize}
+\end{enumerate}
+
+
+Because the Möbius transformation is implemented using differentiable operations, the sampling process is differentiable with respect to \(\mu\) and \(\rho\). This enables the reparameterization trick in the VAE framework, allowing gradients to propagate back through the latent sample \(z\).
+
+\subsection{Local Asymptotic Equivalence to the von Mises-Fisher Distribution}
+\label{sec:local-vmf}
+
+The spherical Cauchy distribution is often compared to the von Mises-Fisher (vMF)
+distribution on the hypersphere. While spCauchy offers superior heavy-tailed behaviour
+globally, it is important to show that it retains the desirable local geometric
+properties of vMF near the mode. In particular, we would like both models to induce
+the same quadratic curvature in geodesic distance when their concentration parameters
+are matched appropriately.
+
+Let $\theta \in [0,\pi]$ denote the geodesic angle of $x \in S^{d-1}$ from the mode
+$\mu$ (i.e. $\arccos(\mu^T x)$). We introduce the concentration matching map
+\begin{equation}\label{eq:matching_map}
+  \kappa(\rho) \coloneq \frac{2(d-1)\rho}{(1-\rho)^2}, \quad 0 < \rho < 1.
+\end{equation}
+The following result shows that, as $\rho \to 1$, vMF with concentration
+$\kappa(\rho)$ and spCauchy with concentration $\rho$ share the same local Gaussian
+limit in the tangent space at $\mu$.
+
+\begin{theorem}\label{thm:vmf-spcauchy-equivalence}
+Let $\theta \in [0,\pi]$ denote the geodesic angle of $x \in S^{d-1}$ from the mode
+$\mu$, and let $\kappa(\rho)$ be defined as in \eqref{eq:matching_map}.
+As $\rho \to 1$, the log-densities of $\mathrm{vMF}(\mu, \kappa(\rho))$ and
+$\mathrm{spCauchy}_d(\mu, \rho)$ admit identical quadratic approximations around the
+mode ($\theta = 0$). Specifically, both satisfy
+\[
+  \log f(x) = C(\rho) - \frac{\kappa(\rho)}{2}\theta^2 + O(\theta^4),
+\]
+for some normalising constant $C(\rho)$.
+Consequently, both distributions converge to the same local Gaussian limit in the
+tangent space at $\mu$.
+\end{theorem}
+
+This result shows that, when concentrations are matched via \eqref{eq:matching_map},
+spCauchy and vMF induce the same local geometry near the mode. In particular, any
+local Gaussian approximation or Laplace-style argument that relies only on the
+quadratic term in the log-density carries over from vMF to spCauchy without change.
+
+
+\subsection{Derivation of the KL Divergence for spCauchy-VAE}\label{KL}
+
+In this section we derive the expression for the Kullback-Leibler (KL) divergence between the spCauchy posterior and the uniform prior on the sphere. Recall that the spCauchy density on the unit sphere \(S^{d-1}\) is given by
+
+\[
+q(x \mid \mu, \rho, d) \coloneq \mathrm{spCauchy}_d(x | \mu, \rho) =\frac{(1-\rho^2)^{d-1}}{A_{d-1}\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)^{d-1}},
+\]
+
+where \(x\in S^{d-1}\), \(\mu\in S^{d-1}\) is a location parameter, \(\rho\in [0,1)\) is a concentration parameter, and \(A_{d-1}\) denotes the surface area of the unit sphere in \(\mathbb{R}^d\). The prior distribution on \(S^{d-1}\) is chosen as the uniform distribution
+
+\[
+p(x) \coloneq \upsilon_d(x)  = \frac{1}{A_{d-1}}.
+\]
+
+Thus, the KL divergence is defined by
+
+\[
+\mathrm{KL}(q\|p) = \int_{S^{d-1}} q(x \mid \mu, \rho, d)  \log \frac{q(x \mid \mu, \rho, d)}{p(x)} dx,
+\]
+where \(dx\) denotes the standard surface measure on the unit sphere \(S^{d-1}\).
+
+Substituting the expressions for \(q(x \mid \mu, \rho, d)\) and \(p(x)\), we obtain
+
+\[
+\mathrm{KL}(q\|p) = \int_{S^{d-1}} q(x \mid \mu, \rho, d)  \log \left[ \frac{(1-\rho^2)^{d-1}}{\bigl(1+\rho^2-2\rho\mu^T x\bigr)^{d-1}} \right] dx.
+\]
+
+Since the uniform prior contributes only a constant factor that cancels with the normalization, this simplifies to
+
+\[
+\mathrm{KL}(q\|p) = (d-1)\log(1-\rho^2) - (d-1)\mathbb{E}_{q}\left[\log\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)\right].
+\]
+It is therefore sufficient to evaluate the expectation
+
+\[
+E = \mathbb{E}_{q}\left[\log\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)\right].
+\]
+
+\begin{lemma}\label{l1}
+Define
+\[
+Z(\gamma)= \int_{S^{d-1}} \frac{(1-\rho^2)^{d-1}}{\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)^{\gamma}}dx.
+\]
+Then
+\[
+E=\mathbb{E}_q\left[\log\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)\right] = -\left.\frac{d}{d\gamma}\log Z(\gamma)\right|_{\gamma=d-1}.
+\]
+\end{lemma}
+
+
+
+\begin{lemma}\label{l2}
+Let $Z(\gamma)$ be defined as
+\begin{equation*}
+    Z(\gamma) = \int_{S^{d-1}} \frac{(1 - \rho^2)^{d-1}}{\big(1 + \rho^2 - 2\rho \mu^T x\big)^{\gamma}}  dx.
+\end{equation*}
+Then, it holds that
+\begin{equation}
+    Z(\gamma) \propto \left(1 + \rho\right)^{-2\gamma}  {}_2F_1 \left(\gamma, \frac{d-1}{2}; d-1; z(\rho) \right),
+\end{equation}
+where \({}_2F_1\) denotes the Gauss hypergeometric function~\citep[15.2.1]{watson:DLMF}.
+\end{lemma}
+
+
+With these lemmas, we can now derive the expectation term \(E\). As detailed in Appendix~\ref{appen}, this involves differentiating the Gauss hypergeometric function from Lemma~\ref{l2} with respect to \(\gamma\) at \(\gamma=d-1\). This procedure yields
+\begin{equation}\label{eq:expectation_E}
+E = 2\log(1+\rho) - \left(1 - z(\rho)\right)^{\frac{d-1}{2}} \sum_{k=0}^{\infty} \frac{\left(\frac{d-1}{2}\right)_k}{k!} z(\rho)^k \Bigl[ \psi(d-1+k) - \psi(d-1) \Bigr].
+\end{equation}
+
+Finally, substituting this expression for \(E\) into the formula
+\[
+\mathrm{KL}(q\|p) = (d-1)\log(1-\rho^2) - (d-1)E
+\]
+and simplifying the logarithmic terms completes the derivation of the KL divergence formula presented earlier in Theorem~\ref{t1}.
+
+
+The power series representation converges rapidly due to \(z(\rho) \in [0,1)\). We can explicitly analyze the asymptotic behavior of the \(k\)-th term, denoted \(T_k\). First, using the recurrence \(\psi(x+1)-\psi(x) = 1/x\), the digamma difference expands as a harmonic sum
+\[
+\psi(d-1+k) - \psi(d-1) = \sum_{j=0}^{k-1} \frac{1}{d-1+j},
+\]
+which grows logarithmically as \(O(\log k)\). Second, the ratio of the Pochhammer symbol to the factorial grows polynomially, using Stirling's approximation, we have \(\frac{((d-1)/2)_k}{k!} \sim \frac{1}{\Gamma((d-1)/2)} k^{(d-3)/2}\) as \(k \to \infty\). Combining these, the series terms behave asymptotically as
+\[
+T_k = O\left( k^{\frac{d-3}{2}} \log k \cdot z(\rho)^k \right).
+\]
+Since \(z(\rho) < 1\), the exponential decay \(z(\rho)^k\) dominates the polynomial and logarithmic growth, ensuring rapid geometric convergence.
+For numerical implementation, the factors can be computed stably in log-space to avoid overflow. However, as \( d \to \infty \), the individual terms in the sum and the prefactor \(\left(1 - z\right)^{\frac{d-1}{2}}\) diverge in opposite directions. While our empirical tests show that this formulation works well even for dimensions up to \( d = 1000 \), the following lemma provides an alternative representation by combining the divergent parts into a single compact integral. This integral can be efficiently approximated using numerical quadrature methods such as Gauss-Legendre quadrature.
+
+\begin{prop}\label{p1}
+The logarithmic derivative of the Gauss hypergeometric function satisfies the integral representation
+\begin{equation}
+    \left.\frac{d}{d\gamma}\log\left( {}_2F_1\Bigl(\gamma,\frac{d-1}{2}; d-1; \frac{4\rho}{(1+\rho)^2}\Bigr)\right)\right|_{\gamma=d-1} 
+    = \int_0^1 \frac{t^{d-2}}{1-t} \left[1 - \left(\frac{(1 -\rho)^2}{(1+\rho)^2 - 4 \rho t}\right)^{\frac{d-1}{2}} \right] dt.
+\end{equation}
+\end{prop}
+
+
+Hence, the expectation $E$ is 
+\begin{align}
+\begin{split}
+E &= 2\log(1+\rho) - \left(\frac{1-\rho}{1+\rho}\right)^{d-1} \sum_{k=0}^{\infty}\frac{\left(\frac{d-1}{2}\right)_k}{k!}\left(\frac{4\rho}{(1+\rho)^2}\right)^k \Bigl[\psi(d-1+k)-\psi(d-1)\Bigr]\\
+ &= 2\log(1+\rho) - \int_0^1 \frac{t^{d-2}}{1-t} \left[1 - \left(\frac{(1 -\rho)^2}{(1+\rho)^2 - 4 \rho t}\right)^{\frac{d-1}{2}} \right] dt.
+ \end{split}
+\end{align}
+
+
+Thus, substituting the expression for \(E\) into the formula for the KL divergence the final closed-form expression for the KL divergence is
+{\small
+\begin{align*}
+ \mathrm{KL}(\mathrm{spCauchy}_d(x | \mu, \rho) \| \upsilon_d) & = (d-1)\log\left(\frac{1-\rho}{1+\rho}\right) + (d-1)\left(\frac{1-\rho}{1+\rho}\right)^{d-1}\sum_{k=0}^{\infty}\frac{\left(\frac{d-1}{2}\right)_k}{k!}z(\rho)^k\Bigl[\psi(d-1+k)-\psi(d-1)\Bigr] \\
+     & = (d-1)\log\left(\frac{1-\rho}{1+\rho}\right) + (d-1) \int_0^1 \frac{t^{d-2}}{1-t} \left[1 - \left(\frac{(1 -\rho)^2}{(1+\rho)^2 - 4 \rho t}\right)^{\frac{d-1}{2}} \right] dt.
+\end{align*}
+}
+
+Both the power series expansion and the quadrature-based approach provide accurate evaluations of the KL divergence. Our empirical tests confirm that both methods perform well in a broad range of settings, with the quadrature approach standing out as particularly reliable and computationally efficient. In practical implementations, we observe that the quadrature method converges rapidly and maintains numerical stability across different dimensions and values of \( \rho \).
+
+Moreover, the integral representation admits a simple large-dimension asymptotic.
+For fixed $\rho\in(0,1)$ and $d\to\infty$, the KL grows linearly in $d$ with slope
+$\log((1+\rho^2)/(1-\rho^2))$.
+
+
+\begin{prop}\label{p:large-d}
+Fix $\rho\in(0,1)$ and let $d\to\infty$. Then
+\[
+\mathrm{KL}\left(\mathrm{spCauchy}_d(\cdot|\mu,\rho)\|\upsilon_d\right)
+=
+(d-1)\log\left(\frac{1+\rho^2}{1-\rho^2}\right) + o(d).
+\]
+\end{prop}
+
+This result confirms that the integral component converges to a constant, i.e., it is \(O(1)\) as \(d \to \infty\). This highlights the  stability of the integral formulation as the integrand remains bounded regardless of dimension. In addition, Proposition~\ref{p:large-d} highlights that for fixed $\rho\in(0,1)$ the KL divergence grows linearly with $d$. Equivalently, the same numerical value of $\rho$ corresponds to a more informative (i.e., more non-uniform) posterior in higher dimension. As a consequence, when comparing models across
+different latent dimensions it is natural to expect smaller learned values of $\rho$ for larger $d$ if the effective regularization strength is to remain comparable.
+
+However, one challenge arises when \( \rho \) approaches 1. In this regime, the parameter \( z(\rho) = \frac{4\rho}{(1+\rho)^2} \) also approaches 1, which slows convergence of both the power-series and quadrature evaluations.
+To analyze this regime, define for \(d\ge 2\)
+\begin{equation}
+J_d(z)=\int_0^1 \frac{t^{d-2}}{1-t}\left[1-\left(\frac{1-z}{1-zt}\right)^{\frac{d-1}{2}}\right]dt,
+\qquad z\in[0,1),
+\label{eq:Jd-def-main}
+\end{equation}
+and
+\begin{equation}
+H_d(z)=J_d(z)+\log(1-z).
+\label{eq:Hd-def-main}
+\end{equation}
+Using \(1-z(\rho)=\left(\frac{1-\rho}{1+\rho}\right)^2\), the KL can be written as
+\begin{equation}
+\mathrm{KL}(\mathrm{spCauchy}_d(\cdot|\mu,\rho)\|\upsilon_d)
+=(d-1)\left(H_d(z(\rho)) - \frac{1}{2}\log(1-z(\rho))\right).
+\label{eq:KL-Hd-rewrite}
+\end{equation}
+
+Equation~\eqref{eq:KL-Hd-rewrite} separates the explicit logarithmic divergence from the residual term \(H_d\). We first characterize this residual in the high-concentration regime, because this is exactly where direct numerical evaluation is most delicate.
+
+\begin{prop}\label{p2}
+Fix \(d\ge 2\) and set \(\delta=(d-1)/2\). As \(\rho\to 1^-\) (equivalently \(z(\rho)\to 1^-\)),
+\[
+\mathrm{KL}(\mathrm{spCauchy}_d(\cdot|\mu,\rho)\|\upsilon_d)
+= (d-1)\left(\log\left(\frac{1+\rho}{1-\rho}\right) + \psi\left(\delta\right) - \psi(d-1)\right) + o(1),
+\]
+where \(o(1)\to 0\) as \(\rho\to 1^-\) for fixed \(d\).
+\end{prop}
+
+Proposition~\ref{p2} identifies the exact first-order high-concentration offset of the KL and yields
+\(\lim_{z\to 1^-}H_d(z)=\psi\left(\frac{d-1}{2}\right)-\psi(d-1)\).
+This endpoint control motivates the next step, proving monotonicity in \(z\), which turns asymptotic information into global bounds valid on the full interval \([0,1)\).
+
+\begin{prop}\label{p:Hd-monotone}
+Fix \(d\ge 2\) and let \(H_d\) be defined by \eqref{eq:Jd-def-main}-\eqref{eq:Hd-def-main}.
+Then \(H_d\) is strictly decreasing on \([0,1)\). Consequently, for all \(z\in[0,1)\),
+\[
+\psi\left(\frac{d-1}{2}\right)-\psi(d-1)\ \le\ H_d(z)\ \le\ 0,
+\]
+equivalently,
+\[
+-\log(1-z)+\psi\left(\frac{d-1}{2}\right)-\psi(d-1)
+\ \le\ J_d(z)\ \le\ -\log(1-z).
+\]
+\end{prop}
+
+These inequalities provide immediate qualitative control. For approximation design and explicit error quantification, we next sharpen the bracket with improved closed-form envelopes.
+
+\begin{prop}\label{p:Hd-refined}
+Fix \(d\ge 2\) and \(\delta=(d-1)/2\). For all \(z\in[0,1)\),
+\[
+\psi(\delta)-\psi(d-1)+\log(2-z)
+\ \le\ H_d(z)\ \le\ \log\left(1-\frac{z}{2}\right).
+\]
+Equivalently,
+\[
+\log\left(\frac{2-z}{1-z}\right)+\psi(\delta)-\psi(d-1)
+\ \le\ J_d(z)\ \le\ \log\left(\frac{2-z}{2(1-z)}\right).
+\]
+Moreover, the bracket width
+\[
+w_d=\psi(d-1)-\psi(\delta)-\log 2
+=\frac{1}{2(d-1)}+O\!\left(\frac{1}{d^2}\right),
+\]
+so the bracket is asymptotically tight as \(d\to\infty\).
+\end{prop}
+
+From Proposition~\ref{p:Hd-refined}, the midpoint approximation
+\[
+\widetilde H_d(z)=\log(2-z)+\frac{1}{2}\Bigl(\psi((d-1)/2)-\psi(d-1)-\log 2\Bigr)
+\]
+satisfies
+\[
+\sup_{z\in[0,1)}|H_d(z)-\widetilde H_d(z)|\le \frac{w_d}{2}.
+\]
+Hence
+\[
+\widetilde{\mathrm{KL}}_d(z)=(d-1)\left(\widetilde H_d(z)-\frac{1}{2}\log(1-z)\right)
+\]
+obeys
+\[
+\sup_{z\in[0,1)}\bigl|\mathrm{KL}_d(z)-\widetilde{\mathrm{KL}}_d(z)\bigr|
+\le (d-1)\frac{w_d}{2} = \frac{1}{4}+O\!\left(\frac{1}{d}\right).
+\]
+The constant \(1/4\) above is a worst-case uniform bound coming from the envelope width.
+More precisely, the midpoint surrogate attains this bound asymptotically at the two endpoints, at \(z=0\), where the upper envelope is exact, and as \(z\to 1^-\), where the lower envelope is exact.
+Since these are precisely the regimes where the behavior of \(H_d\) is already known, this suggests that one
+should be able to improve substantially on the midpoint rule by interpolating more intelligently between the two envelopes.
+
+To make this idea precise, recall
+\[
+L_d(z)=\psi((d-1)/2)-\psi(d-1)+\log(2-z),
+\qquad
+U(z)=\log\left(1-\frac{z}{2}\right),
+\]
+\[
+w_d=U(z)-L_d(z)=\psi(d-1)-\psi((d-1)/2)-\log 2,
+\qquad
+\widehat H_d(z)=L_d(z)+w_d\,\alpha_d(z),\quad 0\le \alpha_d(z)\le 1.
+\]
+Thus the problem reduces to choosing a smooth weight \(\alpha_d(z)\) that moves from the upper boundary
+to the lower one in a geometrically meaningful way.
+
+A natural answer is provided by a Laplace expansion of \(H_d\) itself.
+For fixed \(z<1\) and \(d\to\infty\), one obtains
+\[
+H_d(z)
+=
+\log\left(1-\frac{z}{2}\right)
+-\frac{1}{2(d-1)}\left(\frac{z}{2-z}\right)^2
++O\!\left(\frac{1}{(d-1)^2}\right).
+\]
+This immediately suggests the closed-form surrogate
+\[
+\widehat H_d^{\mathrm{Lap}}(z)
+=
+U(z)-w_d\left(\frac{z}{2-z}\right)^2
+=
+L_d(z)+w_d\,\alpha_d^{\mathrm{Lap}}(z),
+\]
+where
+\[
+\alpha_d^{\mathrm{Lap}}(z)=\frac{4(1-z)}{(2-z)^2}.
+\]
+Since \(0\le \alpha_d^{\mathrm{Lap}}(z)\le 1\) for \(z\in[0,1)\), this remains a genuine interpolation between the two analytic bounds, but now with a direct asymptotic motivation. In particular, for fixed \(z<1\),
+\[
+H_d(z)-\widehat H_d^{\mathrm{Lap}}(z)=O\!\left(\frac{1}{(d-1)^2}\right).
+\]
+Equivalently, if
+\[
+\widehat J_d^{\mathrm{Lap}}(z)
+=
+\widehat H_d^{\mathrm{Lap}}(z)-\log(1-z)
+=
+\log\left(\frac{2-z}{2(1-z)}\right)-w_d\left(\frac{z}{2-z}\right)^2,
+\]
+then
+\[
+J_d(z)-\widehat J_d^{\mathrm{Lap}}(z)=O\!\left(\frac{1}{(d-1)^2}\right),
+\qquad d\to\infty,
+\]
+for fixed \(z<1\). Since the KL itself is
+\[
+\mathrm{KL}_d(z)=(d-1)\left(H_d(z)-\frac12\log(1-z)\right),
+\]
+the induced absolute KL error is therefore \(O((d-1)^{-1})\), while the relative KL error is \(O((d-1)^{-2})\).
+
+The Laplace surrogate is thus asymptotically exact and becomes better as the dimension grows.
+At the same time, one can do even better in the smallest dimensions. In fact, for every integer \(d\ge 2\),
+the KL core \(J_d\) is elementary, although the explicit formulas become complicated rather quickly.
+For our purposes, it is sufficient to exploit the compact closed forms available up to dimension \(5\).
+
+\begin{prop}\label{p:Jd-low-d-closed}
+For \(d=2,3,4,5\), the KL core
+\[
+J_d(z)=\int_0^1 \frac{t^{d-2}}{1-t}\left[1-\left(\frac{1-z}{1-zt}\right)^{\frac{d-1}{2}}\right]dt,
+\qquad z\in(0,1),
+\]
+admits the following elementary closed forms
+\[
+J_2(z)=2\log\left(\frac{1+\sqrt{1-z}}{2\sqrt{1-z}}\right),
+\quad 
+J_3(z)=-1-\frac{\log(1-z)}{z},
+\]
+\[
+J_4(z)=2\log\left(\frac{1+\sqrt{1-z}}{2\sqrt{1-z}}\right)
++\frac{\bigl(1-\sqrt{1-z}\bigr)^2}{2\bigl(1+\sqrt{1-z}\bigr)^2},
+\quad
+J_5(z)=\frac{2}{z^2}-\frac{2}{z}-\frac{5}{6}
++\frac{2-3z}{z^3}\log(1-z).
+\]
+These expressions extend continuously to \(z=0\), where \(J_d(0)=0\).
+\end{prop}
+
+Accordingly, we use the following hybrid rule:
+\[
+\widehat H_d(z)=
+\begin{cases}
+H_d(z) = J_d(z)+\log(1-z), & d=2,3,4,5,\\[1mm]
+\widehat H_d^{\mathrm{Lap}}(z) = \log\left(1-\frac{z}{2}\right)-w_d\left(\dfrac{z}{2-z}\right)^2, & d\ge 6,
+\end{cases}
+\]
+and hence
+\[
+\widehat{\mathrm{KL}}_d(z)
+=
+(d-1)\left(\widehat H_d(z)-\frac12\log(1-z)\right).
+\]
+
+This hybrid construction is exact in the dimensions where absolute KL errors matter most,
+and asymptotically exact thereafter. Moreover, the worst-case behavior is excellent already in the first approximated case.
+Numerically maximizing the absolute KL error over \(z\in[0,1)\) via one-dimensional root finding/optimization shows that the hybrid scheme has maximal observed error approximately
+\[
+\sup_{d\ge 2}\sup_{z\in[0,1)}
+\left|
+\mathrm{KL}_d(z)-\widehat{\mathrm{KL}}_d(z)
+\right|
+\approx 0.0436,
+\]
+attained at \(d=6\), after which the error decreases steadily with dimension.
+Figure~\ref{fig:hybrid-kl-error} illustrates this decay.
+Since the KL values encountered in our experiments are already around \(8\) in the low-dimensional MNIST setting and much larger in the high-dimensional SMILES experiments, this approximation error is negligible for all dimensions considered here.
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=.8\textwidth]{error}
+  \caption{
+    Numerically maximized absolute KL error of the hybrid scheme:
+    exact formulas for \(d=2,3,4,5\) and Laplace surrogate for \(d\ge 6\).
+    The maximal observed error is approximately \(0.0436\), attained at \(d=6\),
+    and decreases thereafter.
+  }
+  \label{fig:hybrid-kl-error}
+\end{figure}
+
+We now complement these results with monotonicity in the latent dimension, which clarifies how the same concentration level behaves across different \(d\).
+
+\begin{prop}\label{p:Jd-monotone-d}
+Fix \(z\in(0,1)\). Then the sequence \(\{J_d(z)\}_{d\ge 2}\) defined in
+\eqref{eq:Jd-def-main} is strictly increasing:
+\[
+J_{d+1}(z)>J_d(z),\qquad d\ge 2.
+\]
+Hence \(H_d(z)=J_d(z)+\log(1-z)\) is also strictly increasing in \(d\).
+
+Moreover, for all \(d\ge 3\),
+\[
+-1-\frac{\log(1-z)}{z}\ \le\ J_d(z)\ \le\ \log\!\left(\frac{1-z/2}{1-z}\right),
+\]
+and equivalently,
+\[
+-1-\frac{(1-z)\log(1-z)}{z}\ \le\ H_d(z)\ \le\ \log\!\left(1-\frac{z}{2}\right).
+\]
+\end{prop}
+
+Proposition~\ref{p:Jd-monotone-d} yields the same explicit upper bound
+\(U(z)=\log\left(1-\frac{z}{2}\right)\)
+together with the monotonicity-based lower bound
+\[
+H_3(z)=-1-\frac{(1-z)\log(1-z)}{z},
+\qquad d\ge 3.
+\]
+For fixed \(d\), this lower bound is slightly sharper than \(L_d\) near \(z=0\). One could similarly use the closed form for \(H_5\) from Proposition~\ref{p:Jd-low-d-closed} to obtain a sharper lower anchor for \(d\ge 5\). However, such bounds remain tied to a fixed reference dimension. In contrast, the lower envelope \(L_d(z)\)
+is dimension-adaptive, matches the exact endpoint
+\(\lim_{z\to1^-}H_d(z)=\psi((d-1)/2)-\psi(d-1),\)
+and, together with \(U\), yields a bracket of width
+\(
+w_d=\psi(d-1)-\psi((d-1)/2)-\log 2
+=\frac{1}{2(d-1)}+O(d^{-2}).
+\)
+Hence only the pair \((L_d,U)\) is asymptotically exact as \(d\to\infty\), which is why it is the appropriate starting point for our surrogate construction. 
+
+This final construction closes the chain from asymptotic analysis to a practical approximation rule. In our implementation, we leverage all representations to ensure efficiency and numerical stability. Quadrature as the default routine, Proposition~\ref{p2} as the high-concentration asymptotic, and the weighted bracket-preserving surrogate above as a robust closed-form fallback when an explicitly bracketed approximation is preferred.
+
+It is also important to note that as \(\rho \to 0\), the KL divergence remains well-behaved. In the limiting case \(\rho = 0\), the spherical Cauchy distribution simplifies to the uniform distribution on the sphere, implying that \(\mathrm{KL}(q\|p) \to 0\). This confirms that the KL divergence smoothly interpolates between the uniform and concentrated regimes of the spherical Cauchy distribution, making our method numerically stable across the entire range of \(\rho\).
+
+
+\subsection{Unified VAE Loss Function}\label{combo}
+
+The overall VAE loss function combines the reconstruction error and the KL divergence. Denote the input data by \( x \) and its reconstruction by \( \hat{x} \) (obtained from the decoder using the latent sample \( z \)). The loss is given by
+\[
+\mathcal{L}(x) = \underbrace{\mathbb{E}_{q(z \mid x)}\left[\ell(x, \hat{x})\right]}_{\text{Reconstruction Loss}} + \underbrace{\mathrm{KL}\Bigl(q(z \mid x)\|p(z)\Bigr)}_{\text{KL Divergence}}.
+\]
+
+For our spCauchy-VAE the reconstruction loss \(\ell(x, \hat{x})\) may be chosen as the mean squared error or another appropriate metric. The KL divergence is computed from the representations derived in the previous section: quadrature as the default evaluator, the high-concentration asymptotic from Proposition~\ref{p2}, and (optionally) the weighted bracket-preserving closed-form surrogate introduced above.
+
+The reparameterization trick ensures that the sampling of \( z \) (using the uniform sample on \( S^{d-1} \) followed by the Möbius transformation) is differentiable with respect to the encoder parameters (which determine \(\mu\) and \(\rho\)). Consequently, the entire loss function is differentiable, and standard gradient-based optimization techniques can be employed.
+
+In summary, the integration of the spCauchy distribution into the VAE framework is achieved by sampling uniformly on the sphere and applying the Möbius transformation to obtain latent samples, computing a closed-form or efficiently approximated KL divergence, and combining the reconstruction loss with the KL divergence to form a unified, differentiable loss function.
+
+These mathematical developments lay the foundation for our novel spCauchy-VAE model, whose experimental validation is described in subsequent sections.
+
+\section{Experiments}
+
+We evaluate the proposed spCauchy-VAE framework along three complementary axes.
+First, we perform an isolated microbenchmark of the latent sampling and KL computation,
+comparing our spCauchy-based implementation against the official vMF-based S-VAE code
+in terms of numerical stability and computational throughput on CPU and GPU.
+This experiment directly targets the structural differences between the two latent models
+and their suitability for high-dimensional latent spaces.
+
+Second, we analyze low-dimensional latent representations using the MNIST digit dataset,
+where the spherical structure can be visualized and assessed for interpolation quality
+and clustering behaviour. Third, we scale the model to a high-dimensional latent space
+and apply it to the generative modelling of chemical molecules represented as SMILES
+strings. This demonstrates the model's scalability, stability, and ability to encode
+structured sequential data in complex domains.
+
+All implementations used in this section, including the PyTorch spCauchy-VAE,
+the MNIST and SMILES experiments, and the latent-layer stress tests, are available
+in the open-source \href{https://github.com/lsablica/SC-VAE}{SC-VAE GitHub repository}.
+
+
+
+\subsection{Numerical Stability and Latent-Layer Performance}
+\label{subsec:throughput}
+
+Before turning to downstream tasks, we first isolate the latent layer of the model and compare the cost and robustness of spCauchy versus a vMF-based latent variable. We integrate the public \texttt{hyperspherical\_vae} PyTorch repository \citep{davidson2018hyperspherical} into our benchmark code and call it directly. In particular, the baseline vMF layer uses Ulrich-style rejection sampling on the sphere \citep{Ulrich} together with the entropy/KL expression based on ratios of exponentially scaled modified Bessel functions, implemented via a custom \texttt{IveFunction} that wraps the very robust \texttt{scipy.special.ive} on the CPU.
+
+For spCauchy, we use the implementation from Section~\ref{method}. Samples are obtained by applying a Möbius transformation to uniform points on $S^{d-1}$, and the KL divergence against the uniform prior is computed with our quadrature expression, implemented entirely in PyTorch.
+
+To match concentration across dimensions, we fix the vMF concentration at $\kappa=10$ and choose the spCauchy concentration $\rho=\rho(d)$ by inverting the concentration-matching map \eqref{eq:matching_map}. Writing $m=d-1$, we set
+\[
+\rho(\kappa) = \frac{-\sqrt{m^2 + 2\kappa m} + m + \kappa}{\kappa},
+\]
+so that spCauchy$_d(\mu,\rho(\kappa))$ and vMF$_d(\mu,\kappa)$ share the same local Gaussian limit in the tangent space for high concentration.
+
+For each latent dimension $d$ we run the following inner loop.
+For spCauchy,
+\begin{align*}
+  \mu &\sim \mathcal{N}(0, I_d), \quad \mu \leftarrow \mu / \|\mu\|, \quad
+  \kappa = 10, \\
+  z &\sim \mathrm{spCauchy}_d(\mu, \rho(\kappa)), \\
+  \mathrm{KL} &= \mathrm{KL}\left(\mathrm{spCauchy}_d(\mu,\rho(\kappa)) \| \mathrm{Unif}(S^{d-1})\right), \\
+  \mathcal{L} &= \sum_i z_i + \sum_i \mathrm{KL}_i,
+\end{align*}
+and we compute a full forward and backward pass of $\mathcal{L}$. For vMF we mirror this structure:
+\begin{align*}
+  \mu &\sim \mathcal{N}(0, I_d), \quad \mu \leftarrow \mu / \|\mu\|, \quad
+  \kappa = 10, \\
+  z &\sim \mathrm{vMF}_d(\mu, \kappa) \text{ via Ulrich rejection sampling}, \\
+  \mathrm{KL} &= \mathrm{KL}\left(\mathrm{vMF}_d(\mu,\kappa) \| \mathrm{Unif}(S^{d-1})\right)
+               \text{via the reference implementation}, \\
+  \mathcal{L} &= \sum_i z_i + \sum_i \mathrm{KL}_i.
+\end{align*}
+We measure wall-clock time per full forward+backward step, with 10 warm-up iterations and 50 measured iterations. On CPU we use a batch size of 128, and on GPU a batch size of 1024. We sweep over $d \in \{8,16,32,64,128,256,512,1024,2048\}$ and mark a configuration as failing if the loss becomes NaN/Inf or the vMF loop raises a runtime error.
+
+For vMF we report two baselines. The first is the official \texttt{hyperspherical\_vae} implementation described above. The second is a robust vMF variant in which we replace all CPU-side special-function calls by a numerically stable implementation that mirrors the strategy in \cite{movMF} and runs fully in PyTorch. Specifically, we evaluate the Bessel ratio $I_{\nu}(\kappa)/I_{\nu-1}(\kappa)$ using a Perron continued fraction, and we evaluate $\log I_{\nu}(\kappa)$ via the ${}_0F_1$ representation in log-space. For the latter, we use a truncated, GPU-friendly \texttt{logsumexp} formulation that computes a block of series terms in parallel (rather than a Python-level loop), keeping the entire entropy/KL computation on device.
+
+Figure~\ref{fig:spcauchy-vmf-throughput} shows the time per iteration on a log-log scale for CPU and GPU. On the CPU, spCauchy is consistently faster than vMF across all tested dimensions. In the low-dimensional regime where the official vMF baseline still runs ($d\le 64$), spCauchy is already about $1.5-3\times$ faster per iteration than vMF. For larger dimensions ($d\ge 128$), the official vMF baseline fails in our benchmark because its entropy/KL computation calls \texttt{scipy.special.ive} for high-order modified Bessel terms. In this regime these evaluations become numerically unstable and produce NaN/Inf values, which then propagate to the loss. This motivated our robust vMF variant, which replaces these calls by stable continued-fraction and series computations in pure PyTorch. The robust vMF variant removes the NaN/Inf failures but has comparable CPU throughput to the official implementation, indicating that the main practical issue of the baseline is numerical stability rather than raw compute on the CPU.
+
+On the GPU, the difference becomes more pronounced. Because spCauchy sampling and KL are implemented purely with standard tensor operations, the whole latent step runs on device and remains efficient as $d$ increases. The official vMF baseline, by contrast, calls \texttt{scipy.special.ive} on the CPU inside the KL computation, forcing repeated device synchronization and making the latent step effectively CPU-bound. This explains both the substantial slowdown (about $3-5\times$ relative to spCauchy for $d\le 64$) and the observed failures for $d\ge 128$ in our benchmark configuration. The robust vMF variant removes the CPU dependency and remains stable up to $d=2048$, however, it still incurs a substantial overhead relative to spCauchy (again about $3-5\times$ in this benchmark), reflecting the rejection sampling and additional continued-fraction and hypergeometric-series machinery required to stably evaluate modified Bessel ratios at large orders.
+
+Overall, this experiment highlights two practical advantages of the spCauchy latent layer. The distribution is stable across a wide range of dimensions using only elementary operations and a fully differentiable M\"obius reparameterization, and it fits naturally into a pure GPU tensor pipeline. 
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=1\textwidth]{benchmark_spcauchy_vs_vmf_stress}
+  \caption{
+    Time per gradient step (forward + backward) as a function of latent dimension $d$
+    for spCauchy-VAE and two vMF baselines: the official \texttt{hyperspherical\_vae}
+    implementation and a numerically robust vMF implementation following 
+    \cite{movMF}. Left: CPU (batch size 128). Right: GPU (batch size 1024).
+    Concentrations are matched by fixing $\kappa=10$ for vMF and setting $\rho=\rho(\kappa)$
+    for spCauchy via \eqref{eq:matching_map}. The official vMF baseline produces NaN/Inf
+    values from $d=128$ onward in this benchmark configuration, while the robust vMF
+    remains stable up to $d=2048$. Even where all methods run, spCauchy is consistently
+    faster on both CPU and GPU.
+  }
+  \label{fig:spcauchy-vmf-throughput}
+\end{figure}
+
+\subsection{MNIST Digits Encoding on \( S^2 \)}
+
+To evaluate the effectiveness of our proposed spCauchy-VAE, we begin with a controlled benchmark on the MNIST dataset of handwritten digits. Due to its simplicity and well-understood structure, MNIST serves as an ideal testbed for analyzing latent space geometry, reconstruction quality, and representation smoothness in generative models. In this experiment, we constrain the latent space to the sphere in 3-dimensional space, \( S^2 \), which is the largest hypersphere that can still be visualized directly. This allows us to qualitatively assess how the spCauchy latent distribution organizes digit classes, supports smooth interpolations, and distributes representations across the spherical manifold.
+
+When using a Variational Autoencoder (VAE) to encode MNIST digits, a spherical latent space can provide a more natural and structured representation compared to a standard Euclidean latent space. One key reason is that in a Euclidean space, the prior distribution is typically chosen as an isotropic Gaussian, which has an implicit origin (mean at zero) that may not correspond to any meaningful feature in the data. This can lead to latent representations where some digits cluster near the origin while others spread outward, making interpolation and structure harder to interpret. In contrast, a spherical latent space, such as one induced by a vMF distribution, removes the notion of a privileged center, enforcing a more uniform and rotation-invariant structure. This helps ensure that all latent representations lie on the same scale, making distances between points more meaningful and facilitating smoother interpolations between digit classes.
+
+Additionally, moving over a spherical space can be more intuitive for encoding meaningful variations in digit representations. Since rotations and traversals on a hypersphere preserve distance better than in Euclidean space (where high-dimensional Gaussians can have anisotropic spread), latent codes tend to distribute more evenly, reducing potential distortions when decoding new samples. This also encourages a more structured latent space where nearby points correspond to semantically similar digits, enhancing generalization and interpolation quality. For instance, transitioning between different digit classes by following geodesics on the sphere often results in smoother and more interpretable interpolations compared to a standard VAE, where linear transitions in Euclidean space can produce unrealistic intermediate samples. Thus, a spherical latent space not only provides better regularization but also aligns more naturally with the continuous variations in handwritten digit structures.
+
+
+We use a convolutional encoder-decoder architecture with latent dimension \( d = 3 \), corresponding to a spherical latent space on \( S^2 \). The encoder consists of three convolutional layers with hidden dimensions 32, 64, and 128, followed by two output heads, one for the latent direction vector \( \mu \in S^2 \), obtained by normalizing the final linear output, and one for the concentration parameter \( \rho \in (0,1) \), obtained via a sigmoid activation. The decoder mirrors the encoder using transposed convolutions to reconstruct the 28×28 grayscale input image.
+
+ReLU activations and a dropout rate of 0.1 are used throughout the network. Training is performed using the AdamW optimizer with a learning rate of 0.0005. To ensure robust convergence, we apply a ReduceLROnPlateau scheduler that halves the learning rate after 5 epochs without improvement in the validation loss. The KL divergence is weighted with a coefficient of $1.0$, and the full objective is optimized using the differentiable Möbius-based reparameterization described in Section~\ref{repar}.
+
+In Figure~\ref{fig:convergence} we show the training dynamics of the spCauchy-VAE on MNIST. We observe a stable and monotonic decrease in the ELBO loss, with no evidence of KL collapse or oscillations. Notably, the KL term contributes meaningfully from early epochs onward, indicating that the spherical latent space is effectively utilized even without KL annealing or warm-up schedules.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width = \textwidth]{conv2.png}
+    \caption{Convergence of the ELBO loss during training on MNIST. Both the reconstruction and KL components decrease steadily, with no signs of instability or posterior collapse.}
+    \label{fig:convergence}
+\end{figure}
+
+Reconstruction quality is illustrated in Figure~\ref{fig:reconstruction}, where we compare original inputs to their reconstructions. Despite the low latent dimensionality (\(d=3\)), the model is able to recover salient features of each digit class, including curves, stroke thickness, and general topology. This demonstrates the expressive power of the spherical Cauchy distribution and the ability of the model to leverage the curved geometry of the latent space.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width = \textwidth]{recon.png}
+    \caption{Left: Original MNIST digits. Right: Reconstructions from the spCauchy-VAE. The model preserves structure and local details despite the compact latent space on \( S^2 \).}
+    \label{fig:reconstruction}
+\end{figure}
+
+One of the key advantages of hyperspherical latent spaces is the ability to interpolate along geodesics, which more faithfully preserve semantic similarity. In Figure~\ref{fig:interpolation}, we show a latent traversal from a digit ``1'' to a digit ``7'' on the sphere. The interpolation is computed using great-circle paths on \( S^2 \), and we decode evenly spaced latent codes along this arc. The generated digits transition smoothly and realistically between classes, with coherent intermediate forms that retain digit-like structure. Interestingly, we observe that the interpolation path appears to pass through the territory of digit ``9”, suggesting that the model organizes semantically similar digits along nearby directions on the sphere. This reflects a meaningful structuring of the latent space, where classes with shared visual characteristics lie along continuous trajectories.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width = \textwidth]{move2.png}
+    \caption{Spherical interpolation on \( S^2 \) between a digit “1” and a digit “7”. Each sample is decoded from a latent code lying on the geodesic between the two endpoints. The transitions are smooth and semantically meaningful.}
+    \label{fig:interpolation}
+\end{figure}
+
+To understand how the latent space is organized, we visualize both posterior samples from the encoder and generative samples decoded from various spherical directions. Figure~\ref{fig:sphereplots} (left) shows the posterior samples projected onto \( S^2 \), with color indicating the digit class (labels used only for visualization). Despite the unsupervised nature of the model, clear clustering is observed, with similar digits forming contiguous regions.
+
+The right panel of Figure~\ref{fig:sphereplots} shows digits decoded from latent codes sampled uniformly across the sphere. These generations demonstrate that the decoder generalizes smoothly across the latent space and that all regions of the sphere yield coherent digit-like images. This confirms that the spCauchy prior does not lead to dead zones or underutilized regions on the sphere.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width = 8.5cm]{spherepoints.png}%
+    \includegraphics[width = 8cm]{sphere.png}\\
+    \caption{Left: Posterior samples \( z \sim q(z \mid x) \) plotted on the unit sphere, colored by digit label. Right: Digits generated by decoding points sampled uniformly over the surface of the sphere. The latent space is both structured and smoothly decodable.}
+    \label{fig:sphereplots}
+\end{figure}
+
+These experiments demonstrate that the spCauchy-VAE is able to learn a compact and meaningful representation of MNIST digits on the hypersphere \( S^2 \). Despite the severe dimensional constraint, the model preserves semantic structure, supports smooth interpolation, and avoids the common pitfalls of hyperspherical modeling such as posterior collapse or unstable training. The Möbius-based reparameterization provides an efficient and differentiable sampling mechanism, while the KL divergence approximation remains accurate and numerically stable throughout. These findings support the suitability of the spherical Cauchy distribution for latent variable modeling in both low- and high-dimensional hyperspherical settings.
+
+\paragraph{Comparison with Gaussian and vMF latent distributions}
+
+To isolate the effect of the latent distribution itself, we compare the spCauchy-VAE with a standard Gaussian VAE and a vMF-VAE implemented using the official \texttt{hyperspherical\_vae} codebase. All models share the exact same CNN encoder-decoder architecture and are trained under identical conditions. We report the minimum reconstruction loss on the MNIST test set across 40 epochs, following common practice for evaluating low-dimensional latent models.
+
+We evaluated both models across a range of latent dimensions, comparing Euclidean latent spaces \(\mathbb{R}^d\) with spherical latent spaces \(\mathbb{S}^d\) for \(d \in \{2, 3, 5, 10, 20\}\).  For $d \ge 5$ we reduce the learning rate from $5\times10^{-4}$ to $1\times10^{-4}$ to stabilize all three models.
+
+Importantly, while the Gaussian model benefits from having a prior from the same distributional family (standard normal), the spCauchy and vMF models must always deviate significantly from its uniform prior to encode any information. Despite this disadvantage, the spherical Cauchy model consistently outperforms the Gaussian baseline in terms of reconstruction accuracy.
+
+\begin{table}[ht]
+\centering
+\caption{Minimum reconstruction loss on the MNIST test set across 40 epochs. Lower is better. The better result in each row is shown in \textbf{bold}.}
+\vspace{0.3em}
+\begin{tabular}{c|ccc}
+\toprule
+Latent Space Dimension & Gaussian VAE (\(\mathbb{R}^d\)) & spCauchy-VAE (\(\mathbb{S}^d\)) & vMF-VAE (\(\mathbb{S}^d\)) \\
+\midrule
+\(d = 2\)  & 132.72 & \textbf{129.46} & 130.54 \\
+\(d = 3\)  & 118.39 & \textbf{116.82} & 117.60 \\
+\(d = 5\)  & 103.07 & \textbf{101.12} & 104.53\\
+\(d = 10\) & 81.25  & \textbf{79.89}  & 83.22 \\
+\(d = 20\) & 74.68  & \textbf{74.33}  & 77.32 \\
+\bottomrule
+\end{tabular}
+\label{tab:mnist-comparison}
+\end{table}
+
+\vspace{1em}
+
+As shown in Table~\ref{tab:mnist-comparison}, the spCauchy-VAE achieves lower reconstruction losses across all tested dimensions. The differences are modest but consistent, demonstrating the robustness of the spCauchy latent space even in low-dimensional regimes.
+
+It is important to note that this comparison is inherently biased in favor of the Gaussian model in higher dimensions. A Gaussian latent space in \(\mathbb{R}^d\) requires \(2d\) parameters (mean and variance), while the spCauchy and vMF models only uses \(d + 2\) parameters (a unit vector \(\mu \in \mathbb{S}^d\) and a scalar \(\rho\) or \(\kappa\)). This means that for \(d > 2\), the Gaussian latent space has strictly more representational capacity. Despite this, the spCauchy-VAE achieves better performance using fewer parameters and with lower computational complexity.
+
+If we were to compare the models at equal latent ``parameter budget'', that is, selecting the hypersphere dimension such that the total number of latent parameters matches that of the Gaussian VAE, the advantage of the spCauchy-VAE and vMF would be even more pronounced. In such a setup, the spherical models would operate in much higher dimensions than the Gaussian, likely leading to substantially stronger performance and an even greater gap in reconstruction quality.
+
+These results suggest that the spCauchy distribution not only provides a geometrically consistent latent space but also delivers competitive and often superior empirical performance-despite its simplicity, fewer parameters, and the challenge of deviating from a uniform prior.
+
+The vMF-based model performs reasonably well in low dimensions, but its reliance on rejection sampling and high-order Bessel ratios makes it substantially more expensive to train. As shown in Section~\ref{subsec:throughput}, a single vMF latent step is already about $1.6$-$2\times$ slower than spCauchy on the CPU and $3$-$4\times$ slower on the GPU, and in our benchmark the baseline vMF KL evaluation returns NaN/Inf beyond $d \approx 64$ under the fixed-$\kappa$ setting. In contrast, the spCauchy latent distribution admits a closed-form density, a fully differentiable Möbius-based reparameterization, and requires only standard tensor operations. This yields both higher numerical robustness and significantly lower computational cost. 
+
+Together with the local asymptotic equivalence in Theorem~\ref{thm:vmf-spcauchy-equivalence}, these results suggest that the spCauchy distribution offers similar geometric fidelity to vMF while providing better numerical stability, simpler implementation, and consistently stronger empirical performance.
+
+\subsection{Generative Molecular Discovery and Latent Space Characterization for SMILES using a High-Dimensional Spherical Cauchy VAE}
+
+Building on our initial validation of the Spherical Cauchy VAE (spCauchy-VAE) on the MNIST dataset, we now extend the framework to a substantially more complex and high-dimensional domain: the generative modeling of chemical molecules. This section evaluates the scalability of the spCauchy-VAE and its ability to learn meaningful representations on the hypersphere \( S^{d-1} \), with a focus on larger dimension, more specifically a latent space of dimensionality \( d=128 \). We aim both to demonstrate the model’s ability to capture the sequential and structured nature of molecular data and to investigate the potential of spherical latent geometry for controlled molecular generation.
+
+We represent molecular structures using the Simplified Molecular Input Line Entry System (SMILES)~\citep{Weininger1988SMILES}, a compact and machine-readable string format encoding atomic types, bond types, ring structures, and branches. Its widespread use in cheminformatics, along with its discrete and compositional structure, makes it an ideal testbed for evaluating the generative capacity of high-dimensional latent VAEs. The latent space in our setting is constrained to the unit hypersphere, encouraging representations to reside on \( S^{127} \) and allowing the model to focus on directional features rather than magnitude. This yields a natural interpretation of molecular similarity via cosine similarity between latent vectors, aligning the geometry of the space with intuitive notions of structural and functional relatedness. Compared to standard Euclidean latent spaces, which are unbounded and lack a fixed notion of scale, the hypersphere offers a bounded and interpretable geometry. The maximum possible distance between any two points is finite, and similarity is always measured with respect to angular separation. In Euclidean space, determining whether one molecule is ``closer” to another depends on arbitrary norms and is always relative to other distances, which can obscure interpretation. On the hypersphere, by contrast, closeness is inherently normalized, and all points lie on the same manifold, making latent relationships both geometrically and chemically more meaningful.
+
+We argue that this spherical constraint provides not only a bounded and regular topology, mitigating issues of drift or unbounded extrapolation, but also a semantically rich space for interpolation. The geodesics on the sphere enable chemically meaningful transitions between molecules, especially relevant in drug discovery and material design, where interpolative synthesis of compounds is often desirable.
+
+\begin{figure}[!ht]
+    \centering
+    \includegraphics[width = \textwidth]{smiles_conv.png}
+    \caption{Training convergence of the Spherical Cauchy VAE for SMILES generation over 500 epochs. Left: Reconstruction loss per epoch. Right: Kullback-Leibler (KL) divergence per epoch. The training progresses stably without signs of posterior collapse, as the KL divergence (unweighted) maintains a significant value after the annealing phase. Transient fluctuations observed in the reconstruction loss around epoch 15 are attributed to the active phase of the KL annealing schedule (10 epochs with zero KL weight, followed by a 15-epoch linear ramp-up of the KL weight to 0.2). This period correlates with the KL divergence beginning to decrease as the encoder adapts to the increasing regularization pressure.}
+\label{smiles_conv}
+\end{figure}
+
+To evaluate these claims, we utilize the ``SMILES DataSet for Analysis \& Prediction”~\citep{KaggleYanMaksiSMILES}, a publicly available collection from Kaggle comprising 16 087 molecular strings. An initial analysis of the dataset revealed that the maximum SMILES string length was 167 characters, though the vast majority of sequences were substantially shorter. To ensure computational tractability and fit within the fixed-length constraints of our transformer-based encoder-decoder architecture, we applied a length filter, retaining only SMILES strings with a maximum of 73 characters. This threshold was chosen based on the empirical distribution of string lengths, which showed a sharp drop-off beyond this point and a heavy concentration of entries below 100 characters. After filtering, 15 873 sequences remained-representing 98.67\% of the full dataset-thus preserving nearly the entire chemical diversity of the original corpus while discarding only a small fraction of exceptionally long strings.
+
+Each remaining SMILES string was augmented with special start-of-sequence (\texttt{<sos>}) and end-of-sequence (\texttt{<eos>}) tokens, yielding a maximum effective sequence length of 75 tokens. Strings shorter than this limit were padded to ensure uniform input dimensionality. Tokenization was performed at the character level, mapping each unique symbol (including atoms, bonds, ring closures, and special tokens) to an integer index, resulting in a clean and generalizable numerical representation of the molecular sequences. Finally, the dataset was randomly split into training and validation subsets using an 80/20 ratio, providing 12 698 samples for training and 3 175 for validation. This preprocessing pipeline ensured a consistent, high-quality input format for our high-dimensional spherical generative model while retaining nearly all of the source data.
+
+Our spCauchy-VAE model employs transformer-based encoder and decoder architectures, each consisting of 4 layers with 4 attention heads per layer. SMILES input tokens are embedded into vectors of dimension 256, and intermediate hidden dimensions are set to 256 and 128. The final output of the encoder is flattened and projected into a 128-dimensional latent space, parameterized by a directional vector \(\mu \in S^{127}\) and a concentration parameter \(\rho \in (0,1)\), following the spherical Cauchy distribution. To ensure stable training in this high-dimensional latent space, we implemented a KL annealing schedule for the variational objective. Specifically, the KL divergence weight \(\beta\) was set to 0 for the first 10 epochs, allowing the model to prioritize reconstruction and learn meaningful encodings early in training. Over the subsequent 15 epochs, \(\beta\) was linearly increased to the target value of 0.2, which was then held constant for the remainder of the 500 training epochs. The model was optimized using the AdamW optimizer with a learning rate of \(1 \times 10^{-4}\) and a weight decay coefficient of 0.01.
+
+The training progressed smoothly, avoiding posterior collapse, and achieved strong reconstruction loss of of approximately 3.7 on the training set. Notably, the final reconstruction loss on the validation set was lower, at approximately 2.0 due to the relatively high dropout of 0.2, which is active during the training phase to prevent overfitting but is disabled during validation. Beyond the aggregate loss metrics, we further evaluated the model's fidelity by measuring its capacity for exact reconstruction of the input SMILES strings. When tested on the training data, the Spherical Cauchy VAE achieved an exact reconstruction accuracy of 93.97\%. More significantly, for the validation set, the model successfully reconstructed 81.17\% of the never before seen SMILES strings perfectly. These results confirm that the spCauchy-VAE can reliably encode and decode SMILES strings, mapping molecular structures to smooth, directionally informative latent codes.
+
+\begin{table}[!ht]
+\centering
+\caption{Percentage of chemically valid SMILES strings generated along interpolation paths (11 steps including endpoints) between pairs of molecules, averaged over 30 pairs. Pairs were selected based on a maximum cosine similarity constraint between their latent \(\mu_{direction}\) vectors. Results are reported as mean\% \(\pm\) standard deviation\%.}
+\label{tab:interpolation_validity}
+\begin{tabular}{lcc}
+\toprule
+Dataset Source     & Max Cosine Sim. Threshold & Valid Intermediates (\%) (mean \(\pm\) std. dev.) \\
+\midrule
+Full Filtered Data & 0.5                       & \(66.67 \pm 18.83\)                               \\
+                   & 0.2                       & \(65.45 \pm 19.27\)                               \\
+                   & 0.0                       & \(63.64 \pm 15.75\)                               \\
+\midrule
+Training Data      & 0.5                       & \(72.73 \pm 12.64\)                               \\
+                   & 0.2                       & \(70.00 \pm 9.43\)                                \\
+                   & 0.0                       & \(64.55 \pm 12.50\)                               \\
+\midrule
+Validation Data    & 0.5                       & \(68.48 \pm 18.14\)                               \\
+                   & 0.2                       & \(66.97 \pm 22.45\)                               \\
+                   & 0.0                       & \(59.39 \pm 18.14\)                               \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+To probe the generative capacity of the learned spherical space, we conducted interpolation experiments using spherical linear interpolation (SLERP) between pairs of latent direction vectors \(\mu_A, \mu_B \in S^{127}\). We generated 11 equidistant points along each geodesic path and decoded them into candidate molecules, assessing chemical validity using RDKit~\citep{RDKit}. By varying the maximum cosine similarity between selected molecular pairs, we evaluated the model’s ability to bridge structurally diverse compounds. More specifically, the latent representations (\(\mu\) vectors) reside on the unit hypersphere \(S^{d-1}\). This allows for a well-defined maximum distance between any two points and enables the use of cosine similarity (the dot product between unit vectors) as an intuitive measure of their relationship. Cosine similarity values range from -1 (diametrically opposed, maximally dissimilar directions) to 1 (identical directions), with 0 indicating orthogonality. A positive dot product suggests that the latent representations point into the same generalized half-space on the sphere, while a negative value indicates opposing orientations, providing a clear framework for interpreting the distance and relatedness of encoded molecules.
+
+The results in Table~\ref{tab:interpolation_validity} demonstrate that even when interpolating between directions facing to opposite half-spaces (cosine similarity \(\leq 0.0\)), the spCauchy-VAE maintains a high rate of valid molecule generation, exceeding 60\%. These findings underscore the smoothness and chemical coherence of the learned latent space and illustrate the model's promise for molecular discovery tasks, where navigating between structurally distinct compounds is essential. The spherical Cauchy geometry not only supports stable training in high dimensions but also provides a principled framework for semantic interpolation and controlled generation in chemical domains.
+
+
+
+\section{Conclusion}
+
+In this work, we have introduced the spCauchy-VAE, a novel variational autoencoder that employs the spherical Cauchy distribution as its latent prior. By naturally constraining the latent space to the unit sphere, our approach captures the inherent directional and cyclic structure present in many real-world datasets. This hyperspherical latent space is not only conceptually appealing but has also been shown, through our theoretical derivations and empirical results, to yield more natural and interpretable representations. In particular, our theoretical analysis confirmed that the spCauchy and vMF priors are asymptotically equivalent near the mode. We showed that both distributions induce identical quadratic approximations in the tangent space, validating spCauchy as a geometrically consistent alternative. We further established monotonicity of the KL core term and derived tight analytic brackets and closed-form surrogates with explicit approximation guarantees in the high-concentration regime.
+
+A key advantage of our method is its numerical robustness. Unlike the widely used von Mises-Fisher (vMF) distribution, whose normalization and entropy/KL terms involve modified Bessel functions and therefore require dedicated special-function routines for robust evaluation, the spCauchy distribution avoids these additional numerical dependencies. By reparameterizing the concentration parameter and expressing the KL divergence in terms of a Gauss hypergeometric function with an argument in \((0,1)\), we ensure rapid convergence and stable numerical evaluation even for large dimensions. A dedicated stress-test benchmark further confirmed this behaviour. Across a wide range of latent dimensions, the spCauchy-VAE objective remained stable on both CPU and GPU, while a reference vMF implementation based on exponentially scaled Bessel functions failed due to numerical underflow beyond moderate dimensions and was consistently slower in the regimes where it remained stable.
+
+Furthermore, the reparameterization trick is elegantly achieved via a Möbius transformation. Starting with uniform samples on the sphere, the Möbius mapping produces samples from the spCauchy distribution in a fully differentiable manner, allowing efficient gradient-based optimization throughout the VAE.
+
+Our experiments on MNIST confirmed the practical effectiveness of the proposed model. Despite the theoretical disadvantages imposed by the uniform prior and fewer latent parameters, the spCauchy-VAE consistently outperformed the Gaussian baseline in terms of reconstruction accuracy across a range of latent dimensions. The model produced smooth interpolations, organized latent codes meaningfully across the sphere, and converged reliably without requiring special initialization or KL annealing. These results, together with the local equivalence result to vMF and the stress-test benchmark, show that spCauchy combines the desirable geometric behaviour of vMF with a more stable and efficient numerical implementation.
+
+To further evaluate the scalability and domain applicability of the spCauchy-VAE, we extended our analysis to the task of molecular generation using SMILES string representations. In this significantly more complex setting, the model successfully learned meaningful embeddings in a 128-dimensional spherical latent space, achieving high reconstruction accuracy and generating chemically valid molecules with strong generalization to unseen data. Importantly, spherical interpolations between latent codes yielded smooth geodesic transitions across molecular structures, with a substantial proportion of valid intermediates even when interpolating between highly dissimilar molecules. 
+
+Looking ahead, an exciting direction for future research is the integration of spherical and Euclidean latent spaces within a single VAE architecture. By concatenating latent codes from both spaces, e.g., a vector from \( \mathbb{S}^d \) and another from \( \mathbb{R}^k \), the model could separately encode cyclic or directional features and unconstrained Euclidean structure, then combine this information in the decoder. Such a hybrid latent space would allow the VAE to leverage the geometric advantages of hyperspherical modeling where appropriate, while retaining the flexibility of standard Gaussian representations. This approach draws parallels with multi-head representation learning, modular latent models, and recent advances in structured latent variable architectures, offering a promising bridge between geometric and probabilistic modeling.
+
+Overall, the spCauchy-VAE provides a compelling alternative to traditional latent distributions. It enables a more faithful hyperspherical characterization of latent spaces, simplifies the computation of the KL divergence, and improves numerical stability, all of which are validated by our experimental results. Future work will further explore its applications and potential advantages across a variety of domains. A particularly promising direction is its application to natural language processing, as it is increasingly evident that embeddings from large language models benefit from being represented on a spherical manifold by being by default normalized. The spCauchy-VAE offers a principled and efficient generative framework for modeling these crucial hyperspherical representations.
+
+\bibliographystyle{plainnat}
+\bibliography{scvae.bib}
+
+
+\appendix
+\section{Proofs}\label{appen}
+
+\begin{proof}[Proof of Theorem~\ref{thm:vmf-spcauchy-equivalence}]
+We analyze the log-densities using the standard small-angle expansion
+$\cos\theta = 1 - \frac{\theta^2}{2} + O(\theta^4)$ as $\theta \to 0$.
+
+For the vMF distribution, ignoring the normalising constant, the log-density is
+\[
+  \log f_{\mathrm{vMF}}(x \mid \kappa)
+  \propto \kappa\cos\theta 
+  = \kappa\Bigl(1 - \frac{\theta^2}{2} + O(\theta^4)\Bigr),
+\]
+so there exists a constant $C_1(\kappa)$ such that
+\[
+  \log f_{\mathrm{vMF}}(x \mid \kappa)
+  = C_1(\kappa) - \frac{\kappa}{2}\theta^2 + O(\theta^4).
+\]
+
+For the spherical Cauchy distribution we have
+\[
+  \log f_{\mathrm{spC}}(x \mid \rho)
+  \propto
+  - (d-1)\log\bigl(1 + \rho^2 - 2\rho\cos\theta\bigr).
+\]
+Using $\cos\theta = 1 - \frac{\theta^2}{2} + O(\theta^4)$, the inner term becomes
+\[
+  1 + \rho^2 - 2\rho\cos\theta
+  =
+  1 + \rho^2 - 2\rho\Bigl(1 - \frac{\theta^2}{2} + O(\theta^4)\Bigr)
+  =
+  (1-\rho)^2 + \rho\theta^2 + O(\theta^4).
+\]
+Factoring out $(1-\rho)^2$ gives
+\[
+  (1-\rho)^2 + \rho\theta^2
+  =
+  (1-\rho)^2\Bigl(1 + \frac{\rho}{(1-\rho)^2}\theta^2 + O(\theta^4)\Bigr).
+\]
+Substituting into the log-density,
+\begin{align*}
+  \log f_{\mathrm{spC}}(x \mid \rho)
+  &\propto
+  - (d-1)\log\Bigl(1 + \frac{\rho}{(1-\rho)^2}\theta^2 + O(\theta^4)\Bigr).
+\end{align*}
+Using $\log(1+u) = u + O(u^2)$, we obtain
+\[
+  \log f_{\mathrm{spC}}(x \mid \rho)
+  =
+  C_2(\rho)
+  - (d-1)\frac{\rho}{(1-\rho)^2}\theta^2 + O(\theta^4),
+\]
+for some normalising constant $C_2(\rho)$.
+
+Matching the quadratic coefficients, we require
+\[
+  \frac{\kappa}{2}
+  =
+  (d-1)\frac{\rho}{(1-\rho)^2},
+\]
+which yields the map $\kappa(\rho)$ in \eqref{eq:matching_map}.
+Under this choice, the quadratic terms in $\theta$ agree, and both log-densities have
+the form
+\[
+  \log f(x) = C(\rho) - \frac{\kappa(\rho)}{2}\theta^2 + O(\theta^4).
+\]
+After rescaling $\theta = r / \sqrt{\kappa(\rho)}$ to local coordinates in the
+tangent space at $\mu$, both log-densities converge to $-\frac{1}{2}r^2$ up to an
+additive constant, so they share the same Gaussian limit.
+\end{proof}
+
+
+\begin{proof}[Proof of Lemma~\ref{l1}]
+Since the spCauchy density is normalized when \(\gamma=d-1\), we have
+\[
+Z(d-1)=\int_{S^{d-1}} \frac{(1-\rho^2)^{d-1}}{\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)^{d-1}}dx = A_{d-1}.
+\]
+Differentiating \(\log Z(\gamma)\) with respect to \(\gamma\) gives
+\[
+\frac{d}{d\gamma}\log Z(\gamma)=\frac{1}{Z(\gamma)}\frac{d}{d\gamma}Z(\gamma),
+\]
+where
+\[
+\frac{d}{d\gamma}Z(\gamma)=-\int_{S^{d-1}} \frac{(1-\rho^2)^{d-1}\log\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)}{\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)^{\gamma}}dx.
+\]
+Thus,
+\[
+\frac{d}{d\gamma}\log Z(\gamma) = -\frac{1}{Z(\gamma)}\int_{S^{d-1}} \frac{(1-\rho^2)^{d-1}\log\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)}{\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)^{\gamma}}dx.
+\]
+Evaluating at \(\gamma=d-1\) and using \(Z(d-1)=A_{d-1}\), we have
+\[
+-\left.\frac{d}{d\gamma}\log Z(\gamma)\right|_{\gamma=d-1}=\frac{1}{A_{d-1}}\int_{S^{d-1}} \frac{(1-\rho^2)^{d-1}\log\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)}{\Bigl(1+\rho^2-2\rho\mu^T x\Bigr)^{d-1}}dx,
+\]
+hence, we conclude that
+
+\[
+E=-\left.\frac{d}{d\gamma}\log Z(\gamma)\right|_{\gamma=d-1}.
+\]
+\end{proof}
+
+\begin{proof}[Proof of Lemma~\ref{l2}]
+By symmetry, we set $\mu = (1, 0, \dots, 0)$ so that $\mu^T x = x_1$. In spherical coordinates, the surface measure on $S^{d-1}$ is given by
+\begin{equation*}
+    dx = A_{d-2} (1 - t^2)^{\frac{d-3}{2}} dt, \quad t = x_1 \in [-1,1].
+\end{equation*}
+Thus,
+\begin{equation*}
+    Z(\gamma) = \frac{(1 - \rho^2)^{d-1} A_{d-2}}{A_{d-1}} \int_{-1}^{1} \frac{(1 - t^2)^{\frac{d-3}{2}}}{(1 + \rho^2 - 2\rho t)^{\gamma}} dt.
+\end{equation*}
+Since
+\begin{equation*}
+    A_{d-1} = A_{d-2} \int_{-1}^{1} (1 - t^2)^{\frac{d-3}{2}} dt,
+\end{equation*}
+the factor $A_{d-2}/A_{d-1}$ normalizes the marginal density of $t$.
+
+Using the substitution $t = 1 - 2u$, with $dt = -2 du$, we obtain
+\begin{align*}
+    1 - t^2 &= 4u(1 - u), \\
+    1 + \rho^2 - 2\rho t &= (1 - \rho)^2 + 4\rho u.
+\end{align*}
+Rewriting,
+\begin{equation*}
+    (1 - \rho)^2 + 4\rho u = (1 - \rho)^2 \left(1 + \frac{4\rho}{(1 - \rho)^2} u \right).
+\end{equation*}
+Substituting into the integral,
+\begin{equation*}
+    Z(\gamma) \propto (1 - \rho)^{-2\gamma} I_{\rho}(\gamma),
+\end{equation*}
+where
+\begin{equation}
+    I_{\rho}(\gamma) = \int_0^1 u^{\frac{d-3}{2}} (1 - u)^{\frac{d-3}{2}} \left(1 + \frac{4\rho}{(1 - \rho)^2} u \right)^{-\gamma} du.
+\end{equation}
+Using the Euler integral representation of the Gauss hypergeometric function \cite[15.6.1]{watson:DLMF},
+\begin{equation*}
+    I_{\rho}(\gamma) \propto {}_2F_1(a, b; c; z) = \frac{\Gamma(c)}{\Gamma(b) \Gamma(c - b)} \int_0^1 u^{b-1} (1 - u)^{c - b - 1} (1 - zu)^{-a} du,
+\end{equation*}
+and matching parameters,
+\begin{align*}
+    b &= \frac{d-1}{2}, \quad c = d-1, \quad a = \gamma, \quad z = -\frac{4\rho}{(1 - \rho)^2}.
+\end{align*}
+Applying Pfaff’s transformation \cite[15.8.1, 15.1.2]{watson:DLMF},
+\begin{equation*}
+    {}_2F_1(a, b; c; z) = (1 - z)^{-a} {}_2F_1\left(a, c - b; c; \frac{z}{z - 1} \right),
+\end{equation*}
+we obtain
+\begin{equation*}
+    {}_2F_1 \left(\gamma, \frac{d-1}{2}; d-1; -\frac{4\rho}{(1 - \rho)^2} \right) = \left(\frac{1+\rho}{1-\rho}\right)^{-2\gamma} {}_2F_1 \left(\gamma, \frac{d-1}{2}; d-1; \frac{4\rho}{(1 + \rho)^2} \right).
+\end{equation*}
+Thus,
+\begin{equation*}
+    Z(\gamma) \propto (1 - \rho)^{-2\gamma}\left(\frac{1+\rho}{1-\rho}\right)^{-2\gamma} {}_2F_1 \left(\gamma, \frac{d-1}{2}; d-1; \frac{4\rho}{(1 + \rho)^2} \right) = \left(1 + \rho\right)^{-2\gamma}  {}_2F_1 \left(\gamma, \frac{d-1}{2}; d-1; \frac{4\rho}{(1 + \rho)^2} \right).
+\end{equation*}
+This completes the proof.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{t1}]
+We start with
+\begin{equation*}
+    Z(\gamma) \propto \left(1+\rho\right)^{-2\gamma}  {}_2F_1\left(\gamma, \frac{d-1}{2}; d-1; z \right),
+\end{equation*}
+where
+\begin{equation*}
+    z = \frac{4\rho}{(1+\rho)^2}.
+\end{equation*}
+Taking logarithms (ignoring additive constants independent of $\gamma$), we obtain
+\begin{equation*}
+    \log Z(\gamma) = -2\gamma \log(1+\rho) + \log \left( {}_2F_1\left(\gamma, \frac{d-1}{2}; d-1; z \right) \right).
+\end{equation*}
+Differentiating term-by-term,
+\begin{align*}
+    \left.\frac{d}{d\gamma} \log Z(\gamma) \right|_{\gamma=d-1} &= -2\log(1+\rho) + \left.\frac{d}{d\gamma} \log \left( {}_2F_1\left(\gamma, \frac{d-1}{2}; d-1; z \right) \right)  \right|_{\gamma=d-1} \\
+    &= -2\log(1+\rho) + \frac{\left. \frac{d}{d\gamma}  {}_2F_1\left(\gamma, \frac{d-1}{2}; d-1; z \right) \right|_{\gamma=d-1}}{{}_2F_1\left(d-1, \frac{d-1}{2}; d-1; z \right)}
+\end{align*}
+The Gauss hypergeometric function is given by the power series \cite[15.2.1]{watson:DLMF}
+\begin{equation*}
+    {}_2F_1(a,b;c;z) = \sum_{k=0}^{\infty} \frac{(a)_k (b)_k}{(c)_k  k!}  z^k.
+\end{equation*}
+Differentiating with respect to $a$, we obtain
+\begin{equation*}
+    \frac{d}{da} {}_2F_1(a,b;c;z) = \sum_{k=0}^{\infty} \frac{(a)_k (b)_k}{(c)_k  k!}  z^k \Bigl[ \psi(a+k) - \psi(a) \Bigr],
+\end{equation*}
+where $\psi(x) = \frac{d}{dx} \log\left( \Gamma(x)\right)$ is the digamma function. In our case, we set
+\begin{equation*}
+    a = \gamma, \quad b = \frac{d-1}{2}, \quad c = d-1.
+\end{equation*}
+Thus,
+\begin{equation*}
+    \frac{d}{d\gamma} {}_2F_1\left(\gamma, \frac{d-1}{2}; d-1; z \right) = \sum_{k=0}^{\infty} \frac{(\gamma)_k \left(\frac{d-1}{2}\right)_k}{(d-1)_k  k!}  z^k \Bigl[ \psi(\gamma+k) - \psi(\gamma) \Bigr].
+\end{equation*}
+Setting $\gamma = d-1$ gives $ (\gamma)_k = (d-1)_k $, so that the ratio simplifies to
+\begin{equation*}
+    \left. \frac{d}{d\gamma} {}_2F_1\left(\gamma, \frac{d-1}{2}; d-1; z \right) \right|_{\gamma = d-1} = \sum_{k=0}^{\infty} \frac{\left(\frac{d-1}{2}\right)_k}{k!}  z^k \Bigl[ \psi(d-1+k) - \psi(d-1) \Bigr].
+\end{equation*}
+Moreover, the denominator simplifies using the identity \cite[15.4.6]{watson:DLMF}
+\begin{equation*}
+    {}_2F_1(a, b; a; z) = (1-z)^{-b},
+\end{equation*}
+which yields
+\begin{equation*}
+    {}_2F_1\left(d-1, \frac{d-1}{2}; d-1; z \right) = (1 - z)^{-\frac{d-1}{2}}.
+\end{equation*}
+Substituting back, we obtain
+\begin{equation*}
+    \left. \frac{d}{d\gamma} \log Z(\gamma) \right|_{\gamma=d-1} = -2\log(1+\rho) + \left(1 - z\right)^{\frac{d-1}{2}} \sum_{k=0}^{\infty} \frac{\left(\frac{d-1}{2}\right)_k}{k!}  z^k \Bigl[ \psi(d-1+k) - \psi(d-1) \Bigr],
+\end{equation*}
+where
+\begin{equation*}
+    z = \frac{4\rho}{(1+\rho)^2}.
+\end{equation*}
+From Lemma~\ref{l1}, the expectation term is \(E = -\left.\frac{d}{d\gamma}\log Z(\gamma)\right|_{\gamma=d-1}\). Substituting this into the KL divergence formula from Section~\ref{KL} yields
+\begin{align*}
+\mathrm{KL}(q\|p) &= (d-1)\log(1-\rho^2) - (d-1)E \\
+&= (d-1)\log(1-\rho^2) + (d-1)\left.\frac{d}{d\gamma}\log Z(\gamma)\right|_{\gamma=d-1} \\
+&= (d-1)\log(1-\rho^2) + (d-1)\left( -2\log(1+\rho) + \left(1-z\right)^{\frac{d-1}{2}} \sum_{k=0}^{\infty} \frac{\left(\frac{d-1}{2}\right)_k}{k!} z^k \Bigl[ \psi(d-1+k) - \psi(d-1) \Bigr] \right).
+\end{align*}
+The logarithmic terms can be combined:
+\[
+(d-1)\bigl( \log(1-\rho^2) - 2\log(1+\rho) \bigr) = (d-1)\log\left(\frac{(1-\rho)(1+\rho)}{(1+\rho)^2}\right) = (d-1)\log\left(\frac{1-\rho}{1+\rho}\right).
+\]
+For the second part of the expression, we use the identity \(1-z = 1 - \frac{4\rho}{(1+\rho)^2} = \frac{(1-\rho)^2}{(1+\rho)^2}\), which implies
+\[
+\left(1-z\right)^{\frac{d-1}{2}} = \left(\frac{1-\rho}{1+\rho}\right)^{d-1}.
+\]
+Combining these results gives the final expression for the KL divergence:
+\[
+\mathrm{KL}(q\|p) = (d-1)\log\left(\frac{1-\rho}{1+\rho}\right) + (d-1)\left(\frac{1-\rho}{1+\rho}\right)^{d-1} \sum_{k=0}^{\infty} \frac{\left(\frac{d-1}{2}\right)_k}{k!} z^k \Bigl[ \psi(d-1+k) - \psi(d-1) \Bigr].
+\]
+This completes the proof.
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{p1}]
+We start with the logarithmic derivative expressed as the ratio of two power series
+\begin{equation*}
+    \left.\frac{d}{d\gamma}\log  {}_2F_1\right|_{\gamma=d-1}  = \left(1 - \frac{4\rho}{(1+\rho)^2}\right)^{\frac{d-1}{2}}
+    \sum_{k=0}^\infty \frac{\left(\frac{d-1}{2}\right)_k}{k!} \Bigl[\psi(d-1+k)-\psi(d-1)\Bigr] \left(\frac{4\rho}{(1+\rho)^2}\right)^k.
+\end{equation*}
+Using the well-known digamma function identity \cite[5.9.16]{watson:DLMF}, we get
+\begin{equation*}
+    \psi(d-1+k) - \psi(d-1) = \int_0^1 \frac{1 - t^k}{1 - t} t^{d-2} dt,
+\end{equation*}
+substituting into the series, we obtain
+\begin{equation*}
+    \left.\frac{d}{d\gamma}\log {}_2F_1\right|_{\gamma=d-1} = \left(1 - \frac{4\rho}{(1+\rho)^2}\right)^{\frac{d-1}{2}} 
+    \int_0^1 \frac{t^{d-2}}{1-t} \sum_{k=0}^\infty \frac{\left(\frac{d-1}{2}\right)_k}{k!} \Bigl(1 - t^k\Bigr) \left(\frac{4\rho}{(1+\rho)^2}\right)^k dt.
+\end{equation*}
+The summations can be rewritten in closed form as
+\begin{align*}
+    \sum_{k=0}^\infty \frac{\left(\frac{d-1}{2}\right)_k}{k!} \left(\frac{4\rho}{(1+\rho)^2}\right)^k &= \left(1 - \frac{4\rho}{(1+\rho)^2}\right)^{-\frac{d-1}{2}}, \\
+    \sum_{k=0}^\infty \frac{\left(\frac{d-1}{2}\right)_k}{k!} \left(\frac{4\rho t}{(1+\rho)^2}\right)^k &= \left(1 - \frac{4\rho t}{(1+\rho)^2}\right)^{-\frac{d-1}{2}}.
+\end{align*}
+Thus, 
+\begin{equation*}
+    \sum_{k=0}^\infty \frac{\left(\frac{d-1}{2}\right)_k}{k!} \Bigl(1 - t^k\Bigr) \left(\frac{4\rho}{(1+\rho)^2}\right)^k
+    = \left(1 - \frac{4\rho}{(1+\rho)^2}\right)^{-\frac{d-1}{2}}
+    - \left(1 - \frac{4\rho t}{(1+\rho)^2}\right)^{-\frac{d-1}{2}}.
+\end{equation*}
+Substituting back, we obtain the final integral representation
+\begin{align*}
+    \left.\frac{d}{d\gamma}\log {}_2F_1\right|_{\gamma=d-1} &= \int_0^1 \frac{t^{d-2}}{1-t} \left[1 - \left(\frac{1 - \frac{4\rho}{(1+\rho)^2}}{1 - \frac{4\rho t}{(1+\rho)^2}}\right)^{\frac{d-1}{2}} \right] dt. \\
+    &= \int_0^1 \frac{t^{d-2}}{1-t} \left[1 - \left(\frac{(1 -\rho)^2}{(1+\rho)^2 - 4 \rho t}\right)^{\frac{d-1}{2}} \right] dt.
+\end{align*}
+This completes the proof.
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{p:large-d}]
+Let $m = d-1$. From the integral representation in Proposition~\ref{p1}, we can write the KL divergence as
+\[
+\mathrm{KL} = m\log\left(\frac{1-\rho}{1+\rho}\right) + m J_m, \qquad J_m = \int_0^1 \frac{t^{m-1}}{1-t} \left[ 1 - \left(\frac{(1-\rho)^2}{(1+\rho)^2-4\rho t}\right)^{m/2} \right] dt.
+\]
+
+We analyze the limit of $J_m$ as $m \to \infty$. Employing the substitution $t = 1 - s/m$ (so $dt = -1/m \ ds$ and $1/(1-t) = m/s$), the integral transforms to
+\[
+J_m = \int_m^0 \left(1-\frac{s}{m}\right)^{m-1} \frac{m}{s} \left[ 1 - \left(1+\frac{cs}{m}\right)^{-m/2} \right] -\frac{1}{m} ds = \int_0^m \left(1-\frac{s}{m}\right)^{m-1} \frac{1}{s} \left[ 1 - \left(1+\frac{cs}{m}\right)^{-m/2} \right] ds,
+\]
+where we have defined $c = \frac{4\rho}{(1-\rho)^2}$ and used the identity
+\[
+\frac{(1-\rho)^2}{(1+\rho)^2 - 4\rho(1-s/m)} = \frac{(1-\rho)^2}{(1-\rho)^2 + \frac{4\rho s}{m}} = \left(1 + \frac{cs}{m}\right)^{-1}.
+\]
+As $m \to \infty$, the terms inside the integral converge for any fixed $s \ge 0$
+\[
+\left(1-\frac{s}{m}\right)^{m-1} \to e^{-s} \quad \text{and} \quad \left(1+\frac{cs}{m}\right)^{-m/2} \to e^{-cs/2}.
+\]
+Consequently, the integrand converges to
+\[
+\frac{e^{-s}}{s}\left(1 - e^{-cs/2}\right).
+\]
+For $s\in(0,1]$, using $1-e^{-u}\le u$ and $(1+\frac{cs}{m})^{-m/2}\ge e^{-cs/2}$ we obtain
+\[
+0\le \frac{1}{s}\left[1-\left(1+\frac{cs}{m}\right)^{-m/2}\right]
+\le \frac{1}{s}\left(1-e^{-cs/2}\right)\le \frac{c}{2}.
+\]
+For $s\ge 1$ we have $0\le \frac{1}{s}[1-(1+\frac{cs}{m})^{-m/2}]\le \frac{1}{s}$ and
+$0\le (1-\frac{s}{m})^{m-1}\le e^{-s}$, hence the integrand is bounded by $e^{1-s}/s$. By the dominated convergence theorem, we pass the limit inside the integral
+\[
+\lim_{m\to\infty} J_m = \int_0^\infty \frac{e^{-s}}{s}\left(1 - e^{-cs/2}\right) ds = \int_0^\infty \frac{e^{-s} - e^{-(1+c/2)s}}{s} ds.
+\]
+Using Frullani's integral identity, this evaluates to
+\[
+\lim_{m\to\infty} J_m = \log\left(1 + \frac{c}{2}\right) = \log\left(1 + \frac{2\rho}{(1-\rho)^2}\right) = \log\left(\frac{1+\rho^2}{(1-\rho)^2}\right).
+\]
+Substituting this limit back into the expression for $\mathrm{KL}$
+\[
+\mathrm{KL} = m\log\left(\frac{1-\rho}{1+\rho}\right) + m\left[\log\left(\frac{1+\rho^2}{(1-\rho)^2}\right) + o(1)\right].
+\]
+Combining the logarithmic terms
+\[
+\log\left(\frac{1-\rho}{1+\rho}\right) + \log\left(\frac{1+\rho^2}{(1-\rho)^2}\right)= \log\left(\frac{1+\rho^2}{1-\rho^2}\right).
+\]
+Thus, we obtain the final asymptotic form
+\[
+\mathrm{KL} = m \log\left(\frac{1+\rho^2}{1-\rho^2}\right) + o(m) = (d-1)\log\left(\frac{1+\rho^2}{1-\rho^2}\right) + o(d).
+\]
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{p2}]
+Let \(\delta=(d-1)/2\) and write \(z=z(\rho)=4\rho/(1+\rho)^2\).
+From Proposition~\ref{p1},
+\[
+\mathrm{KL}
+= (d-1)\left(\log\left(\frac{1-\rho}{1+\rho}\right) + J_d(z)\right),
+\]
+where
+\[
+J_d(z)=\int_0^1 \frac{t^{d-2}}{1-t}\left(1-\left(\frac{1-z}{1-zt}\right)^\delta\right)dt.
+\]
+
+We show
+\begin{equation}
+J_d(z)= -\log(1-z) + \psi(\delta)-\psi(d-1)+o(1),
+\qquad z\to 1^-.
+\label{eq:Jd-near-1-main}
+\end{equation}
+
+Use
+\(\frac{1-t^{d-2}}{1-t}=\sum_{\lambda=0}^{d-3} t^\lambda\)
+to split
+\[
+J_d(z)=J_1(z)-J_2(z),
+\]
+with
+\[
+J_1(z)=\int_0^1 \frac{1}{1-t}\left(1-\left(\frac{1-z}{1-zt}\right)^\delta\right)dt,
+\]
+\[
+J_2(z)=\sum_{\lambda=0}^{d-3}\int_0^1 t^\lambda\left(1-\left(\frac{1-z}{1-zt}\right)^\delta\right)dt.
+\]
+
+For \(J_1\), write
+\[
+J_1(z)=J_{1a}(z)+J_{1b}(z),
+\]
+where
+\[
+J_{1a}(z)=\int_0^1\frac{z}{1-zt}\,dt=-\log(1-z),
+\]
+and
+\[
+J_{1b}(z)=z\int_0^1\frac{1}{1-zt}
+\frac{\frac{1-z}{1-zt}-\left(\frac{1-z}{1-zt}\right)^\delta}
+{1-\frac{1-z}{1-zt}}\,dt.
+\]
+Now substitute \(\frac{1-z}{1-zt}=e^{-u}\). Then
+\[
+J_{1b}(z)=\int_0^{-\log(1-z)}\frac{e^{-u}-e^{-\delta u}}{1-e^{-u}}\,du.
+\]
+By monotone convergence,
+\[
+J_{1b}(z)\to\int_0^\infty\frac{e^{-u}-e^{-\delta u}}{1-e^{-u}}\,du
+=\psi(\delta)-\psi(1)
+\]
+using \cite[5.9.12]{watson:DLMF}.
+
+For \(J_2\), the integrand is bounded by \(t^\lambda\), and
+\(\left(\frac{1-z}{1-zt}\right)^\delta\to 0\) for \(t\in[0,1)\). Hence
+\[
+J_2(z)\to\sum_{\lambda=0}^{d-3}\int_0^1 t^\lambda\,dt
+=\sum_{\lambda=1}^{d-2}\frac{1}{\lambda}
+=\psi(d-1)-\psi(1).
+\]
+Therefore,
+\[
+J_d(z)= -\log(1-z) + \psi(\delta)-\psi(d-1)+o(1),
+\]
+which is \eqref{eq:Jd-near-1-main}.
+
+Since
+\[
+1-z(\rho)=\frac{(1-\rho)^2}{(1+\rho)^2},
+\]
+we have
+\[
+-\log(1-z(\rho))=2\log\left(\frac{1+\rho}{1-\rho}\right).
+\]
+Substituting \eqref{eq:Jd-near-1-main} into the KL identity gives
+\[
+\mathrm{KL}
+=(d-1)\left(\log\left(\frac{1+\rho}{1-\rho}\right)+\psi(\delta)-\psi(d-1)\right)+o(1),
+\]
+as \(\rho\to 1^-\) for fixed \(d\).
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{p:Hd-monotone}]
+Fix \(d\ge 2\), set \(\delta=(d-1)/2\), and let
+\(A(t,z)=\frac{1-z}{1-zt}\).
+Differentiating under the integral sign (using standard dominated-bound argument) gives
+\[
+J_d'(z)=\int_0^1 \delta\,\frac{t^{d-2}}{(1-zt)^2}A(t,z)^{\delta-1}\,dt
+=\delta(1-z)^{\delta-1}\int_0^1 t^{2\delta-1}(1-zt)^{-(\delta+1)}dt.
+\]
+Hence
+\[
+(1-z)J_d'(z)
+=\delta\left(\frac{1-z}{z^2}\right)^\delta
+\int_0^z r^{2\delta-1}(1-r)^{-(\delta+1)}dr,
+\]
+where we used \(r=zt\).
+
+Define \(h(r)=\bigl(\frac{r^2}{1-r}\bigr)^\delta\). Then
+\[
+h'(r)=\delta\,r^{2\delta-1}(1-r)^{-(\delta+1)}(2-r),
+\]
+so
+\[
+(1-z)J_d'(z)=\left(\frac{1-z}{z^2}\right)^\delta\int_0^z\frac{h'(r)}{2-r}\,dr.
+\]
+Because \(2-r\ge 2-z\) on \([0,z]\),
+\[
+\int_0^z\frac{h'(r)}{2-r}\,dr
+\le \frac{1}{2-z}\int_0^z h'(r)\,dr
+=\frac{h(z)}{2-z}.
+\]
+Since \(h(z)=\bigl(\frac{z^2}{1-z}\bigr)^\delta\), the prefactors cancel and
+\[
+(1-z)J_d'(z)\le \frac{1}{2-z}<1.
+\]
+Therefore,
+\[
+H_d'(z)=J_d'(z)-\frac{1}{1-z}<0,
+\]
+so \(H_d\) is strictly decreasing on \((0,1)\), and by continuity on \([0,1)\).
+
+Now \(H_d(0)=0\). By Proposition~\ref{p2},
+\[
+\lim_{z\to 1^-}H_d(z)=\psi\left(\frac{d-1}{2}\right)-\psi(d-1).
+\]
+Monotonicity gives the stated bounds for \(H_d\), and the bounds for \(J_d\) follow from
+\(J_d(z)=H_d(z)-\log(1-z)\).
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{p:Hd-refined}]
+From the previous proof, for \(z\in(0,1)\),
+\[
+(1-z)J_d'(z)\le \frac{1}{2-z}.
+\]
+Hence
+\[
+H_d'(z)=J_d'(z)-\frac{1}{1-z}
+\le \frac{1}{(1-z)(2-z)}-\frac{1}{1-z}
+=-\frac{1}{2-z}.
+\]
+Integrating from \(0\) to \(z\) and using \(H_d(0)=0\),
+\[
+H_d(z)\le -\int_0^z\frac{1}{2-u}\,du
+=\log\left(1-\frac{z}{2}\right).
+\]
+
+For the lower bound,
+\[
+H_d(z)=H_d(1^-)-\int_z^1 H_d'(u)\,du.
+\]
+By Proposition~\ref{p2},
+\(H_d(1^-)=\psi(\delta)-\psi(d-1)\), and by the derivative bound,
+\(-H_d'(u)\ge\frac{1}{2-u}\). Therefore,
+\[
+H_d(z)
+\ge \psi(\delta)-\psi(d-1)+\int_z^1\frac{1}{2-u}\,du
+=\psi(\delta)-\psi(d-1)+\log(2-z).
+\]
+This proves the bracket for \(H_d\), and the bracket for \(J_d\) follows by
+subtracting \(\log(1-z)\) from all terms.
+
+The width is
+\[
+w_d=\psi(d-1)-\psi(\delta)-\log 2.
+\]
+Using the large-argument expansion of \(\psi\) \cite[5.11.2]{watson:DLMF}, with
+\(m=d-1\),
+\[
+w_d=\psi(m)-\psi(m/2)-\log 2
+=\frac{1}{2m}+\frac{1}{4m^2}+O(m^{-3})
+=\frac{1}{2(d-1)}+O(d^{-2}).
+\]
+\end{proof}
+
+
+\begin{proof}[Proof of Proposition~\ref{p:Jd-low-d-closed}]
+We treat the four cases separately.
+
+\textbf{Case \(d=2\).}
+Here
+\[
+J_2(z)=\int_0^1 \frac{1}{1-t}\left[1-\left(\frac{1-z}{1-zt}\right)^{1/2}\right]dt.
+\]
+Set
+\[
+a=\sqrt{1-z},\qquad u=\sqrt{1-zt}.
+\]
+Then
+\[
+t=\frac{1-u^2}{1-a^2},\qquad
+dt=-\frac{2u}{1-a^2}\,du,\qquad
+1-t=\frac{u^2-a^2}{1-a^2}.
+\]
+Moreover,
+\[
+1-\left(\frac{1-z}{1-zt}\right)^{1/2}
+=1-\frac{a}{u}
+=\frac{u-a}{u}.
+\]
+Substituting gives
+\begin{align*}
+J_2(z)
+&=\int_{u=1}^{u=a}
+\frac{1-a^2}{u^2-a^2}\cdot \frac{u-a}{u}\cdot\left(-\frac{2u}{1-a^2}\right)du \\
+&=\int_1^a -\frac{2}{u+a}\,du
+=2\int_a^1 \frac{du}{u+a}.
+\end{align*}
+Hence
+\[
+J_2(z)=2\bigl[\log(u+a)\bigr]_{u=a}^{u=1}
+=2\log\!\left(\frac{1+a}{2a}\right)
+=2\log\!\left(\frac{1+\sqrt{1-z}}{2\sqrt{1-z}}\right).
+\]
+
+\textbf{Case \(d=3\).}
+Now
+\[
+J_3(z)=\int_0^1 \frac{t}{1-t}\left[1-\frac{1-z}{1-zt}\right]dt.
+\]
+Since
+\[
+1-\frac{1-z}{1-zt}
+=\frac{(1-zt)-(1-z)}{1-zt}
+=\frac{z(1-t)}{1-zt},
+\]
+we obtain
+\[
+J_3(z)=z\int_0^1 \frac{t}{1-zt}\,dt.
+\]
+Using
+\[
+\frac{zt}{1-zt}=-1+\frac{1}{1-zt},
+\]
+it follows that
+\[
+J_3(z)=\int_0^1\left(-1+\frac{1}{1-zt}\right)dt
+=\left[-t-\frac{1}{z}\log(1-zt)\right]_{0}^{1}.
+\]
+Therefore
+\[
+J_3(z)=-1-\frac{\log(1-z)}{z}.
+\]
+
+\textbf{Case \(d=4\).}
+Here
+\[
+J_4(z)=\int_0^1 \frac{t^2}{1-t}\left[1-\left(\frac{1-z}{1-zt}\right)^{3/2}\right]dt.
+\]
+Again set
+\[
+a=\sqrt{1-z},\qquad u=\sqrt{1-zt},
+\]
+so that
+\[
+t=\frac{1-u^2}{1-a^2},\qquad
+dt=-\frac{2u}{1-a^2}\,du,\qquad
+1-t=\frac{u^2-a^2}{1-a^2}.
+\]
+Also,
+\[
+1-\left(\frac{1-z}{1-zt}\right)^{3/2}
+=1-\frac{a^3}{u^3}
+=\frac{u^3-a^3}{u^3}
+=\frac{(u-a)(u^2+au+a^2)}{u^3}.
+\]
+Substituting and simplifying gives
+\[
+J_4(z)=\frac{2}{(1-a^2)^2}\int_a^1
+\frac{(1-u^2)^2(u^2+au+a^2)}{u^2(u+a)}\,du.
+\]
+A partial fraction decomposition yields
+\[
+\frac{2(1-u^2)^2(u^2+au+a^2)}{(1-a^2)^2u^2(u+a)}
+=
+\frac{2}{u+a}
++\frac{2a}{(1-a^2)^2u^2}
++\frac{2u^3+(2a^2-4)u-2a^3}{(1-a^2)^2}.
+\]
+Hence
+\begin{align*}
+J_4(z)
+&=\int_a^1 \left[
+\frac{2}{u+a}
++\frac{2a}{(1-a^2)^2u^2}
++\frac{2u^3+(2a^2-4)u-2a^3}{(1-a^2)^2}
+\right]du \\
+&=
+2\bigl[\log(u+a)\bigr]_a^1
++\frac{2a}{(1-a^2)^2}\bigl[-u^{-1}\bigr]_a^1 \\
+&\qquad
++\frac{1}{(1-a^2)^2}
+\left[\frac{u^4}{2}+(a^2-2)u^2-2a^3u\right]_a^1.
+\end{align*}
+After simplification one obtains
+\[
+J_4(z)=2\log\!\left(\frac{1+a}{2a}\right)+\frac{(1-a)^2}{2(1+a)^2}.
+\]
+Recalling \(a=\sqrt{1-z}\), this becomes
+\[
+J_4(z)=2\log\!\left(\frac{1+\sqrt{1-z}}{2\sqrt{1-z}}\right)
++\frac{\bigl(1-\sqrt{1-z}\bigr)^2}{2\bigl(1+\sqrt{1-z}\bigr)^2}.
+\]
+
+\textbf{Case \(d=5\).}
+Now
+\[
+J_5(z)=\int_0^1 \frac{t^3}{1-t}\left[1-\left(\frac{1-z}{1-zt}\right)^2\right]dt.
+\]
+Using
+\[
+(1-zt)^2-(1-z)^2
+=(1-t)\,z\,\bigl(2-z(1+t)\bigr),
+\]
+we get
+\[
+1-\left(\frac{1-z}{1-zt}\right)^2
+=
+\frac{(1-zt)^2-(1-z)^2}{(1-zt)^2}
+=
+\frac{(1-t)\,z\,\bigl(2-z(1+t)\bigr)}{(1-zt)^2}.
+\]
+Therefore
+\[
+J_5(z)=z\int_0^1 \frac{t^3\bigl(2-z(1+t)\bigr)}{(1-zt)^2}\,dt.
+\]
+A partial fraction decomposition gives
+\[
+z\frac{t^3\bigl(2-z(1+t)\bigr)}{(1-zt)^2}
+=
+-t^2-t-\frac{2z-1}{z^2}
++\frac{3z-2}{z^2(1-zt)}
+-\frac{z-1}{z^2(1-zt)^2}.
+\]
+Hence
+\begin{align*}
+J_5(z)
+&=\int_0^1\left(
+-t^2-t-\frac{2z-1}{z^2}
++\frac{3z-2}{z^2(1-zt)}
+-\frac{z-1}{z^2(1-zt)^2}
+\right)dt \\
+&=
+-\frac13-\frac12-\frac{2z-1}{z^2}
++\frac{3z-2}{z^2}\int_0^1\frac{dt}{1-zt}
+-\frac{z-1}{z^2}\int_0^1\frac{dt}{(1-zt)^2}.
+\end{align*}
+Now
+\[
+\int_0^1 \frac{dt}{1-zt}
+=-\frac{1}{z}\log(1-z),
+\qquad
+\int_0^1 \frac{dt}{(1-zt)^2}
+=\left[\frac{1}{z(1-zt)}\right]_0^1
+=\frac{1}{1-z}.
+\]
+Substituting these into the previous display yields
+\[
+J_5(z)
+=
+-\frac{5}{6}
+-\frac{2z-1}{z^2}
+-\frac{3z-2}{z^3}\log(1-z)
+-\frac{z-1}{z^2(1-z)}.
+\]
+Since
+\[
+-\frac{2z-1}{z^2}-\frac{z-1}{z^2(1-z)}
+=
+-\frac{2z-1}{z^2}+\frac{1}{z^2}
+=
+\frac{2}{z^2}-\frac{2}{z},
+\]
+we obtain
+\[
+J_5(z)=\frac{2}{z^2}-\frac{2}{z}-\frac{5}{6}
++\frac{2-3z}{z^3}\log(1-z).
+\]
+
+This proves all four closed forms.
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{p:Jd-monotone-d}]
+Fix \(z\in(0,1)\), \(d\ge 2\), and set \(\delta=(d-1)/2\). Write
+\[
+J_{d+1}(z)-J_d(z)=I_1+I_2,
+\]
+where
+\[
+I_1=\int_0^1 \frac{t^{d-1}-t^{d-2}}{1-t}\,dt,
+\quad
+I_2=\int_0^1 \frac{t^{d-2}}{1-t}\left[
+\left(\frac{1-z}{1-zt}\right)^\delta
+-t\left(\frac{1-z}{1-zt}\right)^{\delta+1/2}
+\right]dt.
+\]
+Clearly,
+\[
+I_1=\int_0^1 \frac{t^{d-2}(t-1)}{1-t}\,dt=-\frac{1}{d-1}.
+\]
+
+For \(t\in(0,1)\),
+\[
+\bigl(1-zt-t\sqrt{1-z}\sqrt{1-zt}\bigr)-\bigl(1-zt/2\bigr)(1-t)
+=\frac{t}{2}\bigl(\sqrt{1-zt}-\sqrt{1-z}\bigr)^2>0.
+\]
+Hence
+\[
+\frac{1}{1-t}
+\left(
+\frac{1}{(1-zt)^\delta}
+-t\frac{\sqrt{1-z}}{(1-zt)^{\delta+1/2}}
+\right)
+>\frac{1-zt/2}{(1-zt)^{\delta+1}}.
+\]
+Multiplying by \(t^{d-2}(1-z)^\delta\) and integrating,
+\[
+I_2>
+\int_0^1 t^{d-2}(1-z)^\delta\frac{1-zt/2}{(1-zt)^{\delta+1}}\,dt.
+\]
+Also,
+\[
+\frac{d}{dt}\left(\frac{t^{d-1}}{(1-zt)^\delta}\right)
+=(d-1)\frac{t^{d-2}}{(1-zt)^{\delta+1}}\left(1-\frac{zt}{2}\right).
+\]
+Therefore,
+\[
+I_2>
+\frac{(1-z)^\delta}{d-1}
+\int_0^1
+\frac{d}{dt}\left(\frac{t^{d-1}}{(1-zt)^\delta}\right)dt
+=\frac{(1-z)^\delta}{d-1}
+\left.\frac{t^{d-1}}{(1-zt)^\delta}\right|_0^1
+=\frac{1}{d-1}.
+\]
+So \(J_{d+1}(z)-J_d(z)=I_1+I_2>0\), proving strict monotonicity in \(d\).
+The claim for \(H_d\) follows by adding \(\log(1-z)\).
+
+The limit
+\[
+\lim_{d\to\infty}J_d(z)=\log\!\left(\frac{1-z/2}{1-z}\right)
+\]
+is the \(z\)-form of Proposition~\ref{p:large-d}. By Proposition~\ref{p:Jd-low-d-closed},
+\[
+J_3(z)=-1-\frac{\log(1-z)}{z}.
+\]
+Hence, by monotonicity, for all \(d\ge 3\),
+\[
+-1-\frac{\log(1-z)}{z}=J_3(z)\le J_d(z)\le
+\log\!\left(\frac{1-z/2}{1-z}\right).
+\]
+Adding \(\log(1-z)\) gives the equivalent bounds for \(H_d\).
+\end{proof}
+
+\end{document}
