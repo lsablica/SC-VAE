@@ -18,7 +18,6 @@ from src.kl import (
     kl_divergence_spcauchy2,
     kl_divergence_spcauchy_approx,
     kl_divergence_spcauchy_asympt,
-    kl_divergence_spcauchy_combined,
     kl_divergence_spcauchy_reference,
 )
 
@@ -114,11 +113,6 @@ def run_kl_approximation_comparison(
                 dimension,
                 k_terms=max(k_terms, 4000),
                 n_nodes=max(n_nodes, 2000),
-            ),
-            "combined_exact": lambda tensor: kl_divergence_spcauchy_combined(
-                tensor,
-                dimension,
-                n_nodes=n_nodes,
             ),
             "series": lambda tensor: kl_divergence_spcauchy(
                 tensor,
