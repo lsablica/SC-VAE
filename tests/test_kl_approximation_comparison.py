@@ -5,6 +5,7 @@ import time
 
 import numpy as np
 import torch
+from scipy.special import hyp2f1
 
 import matplotlib
 
@@ -18,7 +19,6 @@ from src.kl import (
     kl_divergence_spcauchy2,
     kl_divergence_spcauchy_approx,
     kl_divergence_spcauchy_asympt,
-    kl_divergence_spcauchy_reference,
 )
 
 
@@ -26,6 +26,51 @@ def build_rho_grid(num_points):
     low_grid = np.linspace(0.01, 0.9, max(num_points // 2, 2))
     high_grid = np.linspace(0.9, 0.999, max(num_points - low_grid.size + 1, 2))
     return np.unique(np.concatenate([low_grid, high_grid]))
+
+
+def rho_to_z(rho_values):
+    rho_values = np.asarray(rho_values, dtype=float)
+    return 4.0 * rho_values / np.square(1.0 + rho_values)
+
+
+def stable_log_hyp2f1_for_h_derivative(z_value, dimension, fd_step):
+    c = dimension - 1.0
+    delta = (dimension - 1) / 2.0
+    log_one_minus_z = np.log1p(-z_value)
+
+    # Use Euler's transform so the hypergeometric factor stays near 1 when z -> 1.
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        lp_core = hyp2f1(-fd_step, delta, c, z_value)
+        lm_core = hyp2f1(fd_step, delta, c, z_value)
+        lp = (-delta - fd_step) * log_one_minus_z + np.log(lp_core)
+        lm = (-delta + fd_step) * log_one_minus_z + np.log(lm_core)
+
+    return lp, lm
+
+
+def h_true_scalar(z_value, dimension, fd_step=1e-5):
+    z_value = float(np.clip(z_value, 1e-12, 1 - 1e-10))
+
+    if dimension in {2, 3, 4, 5}:
+        rho_value = (1.0 - np.sqrt(1.0 - z_value)) / (1.0 + np.sqrt(1.0 - z_value))
+        rho_tensor = torch.tensor([[rho_value]], dtype=torch.float64)
+        h_value = kl_divergence_spcauchy_approx(rho_tensor, dimension, approximation="hybrid").item()
+        return h_value / (dimension - 1.0) + 0.5 * np.log1p(-z_value)
+
+    lp, lm = stable_log_hyp2f1_for_h_derivative(z_value, dimension, fd_step)
+
+    if not (np.isfinite(lp) and np.isfinite(lm)):
+        return np.nan
+
+    return (lp - lm) / (2.0 * fd_step) + np.log1p(-z_value)
+
+
+def kl_reference_from_h_approximation(rho_tensor, dimension):
+    rho_values = rho_tensor.detach().cpu().numpy().reshape(-1)
+    z_values = rho_to_z(rho_values)
+    h_values = np.asarray([h_true_scalar(z_value, dimension) for z_value in z_values], dtype=np.float64)
+    kl_values = (dimension - 1.0) * (h_values - 0.5 * np.log1p(-z_values))
+    return torch.tensor(kl_values, dtype=rho_tensor.dtype, device=rho_tensor.device)
 
 
 def timed_evaluation(fn, rho_tensor, device):
@@ -108,12 +153,7 @@ def run_kl_approximation_comparison(
 
     for dimension in dimensions:
         method_specs = {
-            "reference": lambda tensor: kl_divergence_spcauchy_reference(
-                tensor,
-                dimension,
-                k_terms=max(k_terms, 4000),
-                n_nodes=max(n_nodes, 2000),
-            ),
+            "reference": lambda tensor: kl_reference_from_h_approximation(tensor, dimension),
             "series": lambda tensor: kl_divergence_spcauchy(
                 tensor,
                 dimension,

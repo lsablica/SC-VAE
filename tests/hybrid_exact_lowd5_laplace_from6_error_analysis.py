@@ -34,6 +34,21 @@ def z_to_rho(z_values):
     return (1.0 - sqrt_one_minus_z) / (1.0 + sqrt_one_minus_z)
 
 
+def stable_log_hyp2f1_for_h_derivative(z_value, dimension, fd_step):
+    c = dimension - 1.0
+    delta = (dimension - 1) / 2.0
+    log_one_minus_z = np.log1p(-z_value)
+
+    # Use Euler's transform so the hypergeometric factor stays near 1 when z -> 1.
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        lp_core = hyp2f1(-fd_step, delta, c, z_value)
+        lm_core = hyp2f1(fd_step, delta, c, z_value)
+        lp = (-delta - fd_step) * log_one_minus_z + np.log(lp_core)
+        lm = (-delta + fd_step) * log_one_minus_z + np.log(lm_core)
+
+    return lp, lm
+
+
 def h_true_scalar(z_value, dimension, h=1e-5):
     z_value = float(np.clip(z_value, 1e-12, 1 - 1e-10))
 
@@ -42,11 +57,7 @@ def h_true_scalar(z_value, dimension, h=1e-5):
         h_value = kl_divergence_spcauchy_approx(rho_tensor, dimension, approximation="hybrid").item()
         return h_value / (dimension - 1.0) + 0.5 * np.log1p(-z_value)
 
-    delta = (dimension - 1) / 2.0
-    c = dimension - 1.0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        lp = np.log(hyp2f1(c + h, delta, c, z_value))
-        lm = np.log(hyp2f1(c - h, delta, c, z_value))
+    lp, lm = stable_log_hyp2f1_for_h_derivative(z_value, dimension, h)
     if not (np.isfinite(lp) and np.isfinite(lm)):
         return np.nan
     return (lp - lm) / (2.0 * h) + np.log1p(-z_value)
