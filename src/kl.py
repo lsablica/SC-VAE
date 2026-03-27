@@ -276,7 +276,7 @@ def kl_divergence_spcauchy2(rho, latent_dim, n_nodes=None):
         torch.Tensor: KL divergence of shape (batch_size,).
     """
     if n_nodes is None:
-        n_nodes = 1000
+        n_nodes = 400
 
     rho, z = _prepare_spcauchy_inputs(rho)
     device = rho.device

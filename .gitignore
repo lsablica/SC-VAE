@@ -13,6 +13,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+.conda/
 .Python
 build/
 develop-eggs/
