@@ -1,0 +1,47 @@
+{
+  "best_recon_checkpoint": {
+    "checkpoint_path": "experiments/mnist_experiment/outputs/benchmark/vmf/dim_3/seed_5/best_recon_checkpoint.pt",
+    "epoch": 40,
+    "eval_kl": 8.954914080945752,
+    "eval_recon_loss": 119.04823486714423,
+    "eval_total_loss": 128.00314871872527
+  },
+  "final_checkpoint": {
+    "checkpoint_path": "experiments/mnist_experiment/outputs/benchmark/vmf/dim_3/seed_5/final_checkpoint.pt",
+    "epoch": 40,
+    "eval_kl": 8.954914080945752,
+    "eval_recon_loss": 119.05915909779223,
+    "eval_total_loss": 128.01407362539558
+  },
+  "run_config": {
+    "activation": "relu",
+    "ambient_latent_dim": 4,
+    "batch_size": 128,
+    "decoder_type": "cnn",
+    "dropout_rate": 0.1,
+    "encoder_type": "cnn",
+    "epochs": 40,
+    "hidden_dims": [
+      32,
+      64,
+      128
+    ],
+    "kl_weight": 1.0,
+    "learning_rate": 0.0003,
+    "model_family": "vmf",
+    "notes": "Notebook-faithful benchmark comparison on MNIST.",
+    "optimizer_name": "AdamW",
+    "preset": "benchmark_comparison",
+    "reported_dim": 3,
+    "scheduler_factor": 0.5,
+    "scheduler_name": "ReduceLROnPlateau",
+    "scheduler_patience": 5,
+    "seed": 5,
+    "selection_metric": "eval_recon_loss",
+    "tags": [
+      "benchmark",
+      "mnist"
+    ],
+    "warmup_steps": 200
+  }
+}

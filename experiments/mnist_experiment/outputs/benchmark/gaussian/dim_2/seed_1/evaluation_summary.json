@@ -1,0 +1,47 @@
+{
+  "best_recon_checkpoint": {
+    "checkpoint_path": "experiments/mnist_experiment/outputs/benchmark/gaussian/dim_2/seed_1/best_recon_checkpoint.pt",
+    "epoch": 40,
+    "eval_kl": 7.038706097421767,
+    "eval_recon_loss": 132.73536952537827,
+    "eval_total_loss": 139.77407585820066
+  },
+  "final_checkpoint": {
+    "checkpoint_path": "experiments/mnist_experiment/outputs/benchmark/gaussian/dim_2/seed_1/final_checkpoint.pt",
+    "epoch": 40,
+    "eval_kl": 7.038706097421767,
+    "eval_recon_loss": 132.74577688869041,
+    "eval_total_loss": 139.7844833180874
+  },
+  "run_config": {
+    "activation": "relu",
+    "ambient_latent_dim": 2,
+    "batch_size": 128,
+    "decoder_type": "cnn",
+    "dropout_rate": 0.1,
+    "encoder_type": "cnn",
+    "epochs": 40,
+    "hidden_dims": [
+      32,
+      64,
+      128
+    ],
+    "kl_weight": 1.0,
+    "learning_rate": 0.0003,
+    "model_family": "gaussian",
+    "notes": "Notebook-faithful benchmark comparison on MNIST.",
+    "optimizer_name": "AdamW",
+    "preset": "benchmark_comparison",
+    "reported_dim": 2,
+    "scheduler_factor": 0.5,
+    "scheduler_name": "ReduceLROnPlateau",
+    "scheduler_patience": 5,
+    "seed": 1,
+    "selection_metric": "eval_recon_loss",
+    "tags": [
+      "benchmark",
+      "mnist"
+    ],
+    "warmup_steps": 200
+  }
+}

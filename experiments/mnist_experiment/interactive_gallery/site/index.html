@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MNIST Sphere Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <p class="eyebrow">spCauchy-VAE</p>
+        <h1>Interactive MNIST Sphere</h1>
+        <p id="hero-copy" class="hero-copy"></p>
+      </header>
+
+      <section class="toolbar">
+        <button id="reset-view" type="button">Reset view</button>
+        <div id="legend" class="legend-row"></div>
+      </section>
+
+      <main class="layout">
+        <section class="plot-card">
+          <div id="plot" class="plot-frame"></div>
+        </section>
+        <aside class="meta-card">
+          <h2 id="plot-title"></h2>
+          <p id="plot-description" class="muted"></p>
+          <div id="selection-summary" class="meta-grid"></div>
+          <div id="run-summary" class="run-block"></div>
+          <p id="source-run" class="source-path"></p>
+        </aside>
+      </main>
+    </div>
+
+    <div id="hover-card" class="hover-card" aria-hidden="true">
+      <img id="hover-image" alt="Hovered MNIST digit" />
+      <div class="hover-copy">
+        <div id="hover-label" class="hover-label"></div>
+        <div id="hover-index" class="hover-meta"></div>
+        <div id="hover-coords" class="hover-meta"></div>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
