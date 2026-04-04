@@ -184,6 +184,8 @@ experiments/mnist_experiment/interactive_gallery/site/.nojekyll
 *.pt
 results/
 viz/
+experiments/smiles/results/
+experiments/smiles/main_figures/
 
 # Logs
 logs/
