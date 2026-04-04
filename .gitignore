@@ -179,6 +179,8 @@ data/
 *.pt
 results/
 viz/
+experiments/smiles/results/
+experiments/smiles/main_figures/
 
 # Logs
 logs/

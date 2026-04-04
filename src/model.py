@@ -61,7 +61,7 @@ class SpCauchyVAE(nn.Module):
 
         if self.distribution_type == 'spcauchy':
             with torch.no_grad():
-                self.fc_second_param.bias.fill_(2.0) # start with bias that gives rho ~0.73    
+                self.fc_second_param.bias.fill_(getattr(config, "spcauchy_rho_bias_init", 2.0))
         
         # Build decoder
         if config.decoder_type == "mlp":
