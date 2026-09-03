@@ -1,0 +1,11 @@
+{
+  "best_non_spcauchy_primary_competitor": "vmf_robust",
+  "interpolation_quantitative_result_agrees": true,
+  "observed_reconstruction_not_materially_worse": true,
+  "recommend_main_paper": true,
+  "rule": "replace only if spherical Cauchy is best or tied on gap reconstruction, wins at least one geometry metric, has no material observed-view cost, and interpolation agrees",
+  "spcauchy_best_or_statistically_tied_on_gap": true,
+  "spcauchy_geometry_wins": [
+    "pose_test_gap_mean_error_degrees"
+  ]
+}

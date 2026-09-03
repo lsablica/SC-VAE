@@ -1,0 +1,58 @@
+{
+  "artifact_count": 10,
+  "artifacts": [
+    {
+      "bytes": 474,
+      "path": "commands.txt",
+      "sha256": "554d410dc729d61eeae788b5fbbd603aa83d08d92a5933243b9d23a71095c91b"
+    },
+    {
+      "bytes": 702,
+      "path": "decision.json",
+      "sha256": "41063a34aceb1add15877ea64d3b733ec16355df900b6303e6883127f095b112"
+    },
+    {
+      "bytes": 547,
+      "path": "environment.txt",
+      "sha256": "226f721a386bc46ff837693ad2b1c95f2695039413d4fa5d646ef510706e5de3"
+    },
+    {
+      "bytes": 471211,
+      "path": "figures/contamination_transition.png",
+      "sha256": "f0e3c7a6bf62de5185a9efb0fd8f2f97afe2a097ad9890de416fccc624b6a77b"
+    },
+    {
+      "bytes": 265168,
+      "path": "figures/mass_calibration_transition.png",
+      "sha256": "d74cd5074480f2b4e29eb14aba8677a136ff2ca1378d993384ea94318c0c183d"
+    },
+    {
+      "bytes": 216372,
+      "path": "figures/tail_calibration_transition.png",
+      "sha256": "226639465d6d15a1de9608a573992c7e52df5e08992ec8496ae02d3a73f9a51e"
+    },
+    {
+      "bytes": 45521,
+      "path": "tables/aggregate.csv",
+      "sha256": "d29a1429e9ba4b98490fe4ccebe7cf32a159bea72ed4a085884b1770c23c90de"
+    },
+    {
+      "bytes": 1472,
+      "path": "tables/forward_kl.tex",
+      "sha256": "f8325dea3ede0e9286aea67b09725f4bcef118f20fa5e07751f5d09c2421d8af"
+    },
+    {
+      "bytes": 1466,
+      "path": "tables/reverse_kl.tex",
+      "sha256": "d07b2f6d8601d3babedc210a2e62ec3eddf2d4469a744ba8a9819414f77d2278"
+    },
+    {
+      "bytes": 125700,
+      "path": "tables/seed_level.csv",
+      "sha256": "ed20ad3dc9b1437087e83e84bc3c4092682c0c230b903bfcdf51954943e985e6"
+    }
+  ],
+  "experiment": "contaminated_directional",
+  "root": "experiments/contaminated_directional/final",
+  "schema_version": 1
+}

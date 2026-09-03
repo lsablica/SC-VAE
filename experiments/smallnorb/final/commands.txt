@@ -1,0 +1,6 @@
+python -m experiments.smallnorb.run_all --families vmf_robust powerspherical gaussian_isotropic --seeds 0 1 2 3 4 --device cuda
+python -m experiments.smallnorb.run_all --families spcauchy vmf_robust powerspherical gaussian_isotropic --seeds 0 1 2 3 4 --device cuda
+python -m experiments.smallnorb.run_all --families spcauchy --seeds 4 --device cuda
+python -m experiments.smallnorb.aggregate
+python -m experiments.smallnorb.figures --device cuda
+python -m experiments.smallnorb.record_manifest --finalize

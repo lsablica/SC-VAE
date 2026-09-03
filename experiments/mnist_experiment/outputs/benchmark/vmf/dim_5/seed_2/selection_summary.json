@@ -1,8 +1,0 @@
-{
-  "checkpoint_path": "experiments/mnist_experiment/outputs/benchmark/vmf/dim_5/seed_2/best_recon_checkpoint.pt",
-  "selected_epoch": 40,
-  "selected_eval_kl": 12.205203333987466,
-  "selected_eval_recon_loss": 104.93564016607743,
-  "selected_eval_total_loss": 117.14084325862837,
-  "selection_metric": "eval_recon_loss"
-}

@@ -1,0 +1,17 @@
+{
+  "clean_interpretable_transition": true,
+  "epsilon_zero_best_families": [
+    "vmf",
+    "vmf",
+    "vmf",
+    "vmf",
+    "vmf",
+    "vmf"
+  ],
+  "epsilon_zero_vmf_sanity_passed": true,
+  "high_contamination_cell_count": 6,
+  "high_contamination_forward_kl_spcauchy_wins": 6,
+  "high_contamination_joint_mass_calibration_spcauchy_wins": 6,
+  "recommend_include_in_paper": true,
+  "rule": "Require vMF to win all epsilon-zero forward and reverse cells, then spherical Cauchy to win at least four of six epsilon 0.10 or 0.20 forward-KL cells and four of six corresponding joint central-plus-remote mass calibration cells. Hemisphere mass is also reported separately and is not used to break ties."
+}

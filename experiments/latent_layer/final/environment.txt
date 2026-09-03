@@ -1,0 +1,8 @@
+source=release tree containing these artifacts
+python=3.12.13
+torch=2.11.0+cu128
+cpu=Intel Core i7-10875H CPU @ 2.30GHz
+cuda_device=NVIDIA GeForce RTX 2070 with Max-Q Design, 8192 MiB
+cuda=12.8
+triton=3.6.0
+driver=595.84

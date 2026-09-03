@@ -1,0 +1,83 @@
+{
+  "best_recon_checkpoint": {
+    "checkpoint_path": "experiments/mnist/outputs/benchmark/spcauchy/dim_2/seed_0/best_recon_checkpoint.pt",
+    "concentration": {
+      "count": 10000,
+      "fraction_above_0_9": 1.0,
+      "max": 0.9948787689208984,
+      "mean": 0.9838362312853336,
+      "median": 0.9840288162231445,
+      "min": 0.9651827812194824,
+      "parameter": "rho",
+      "q25": 0.9807848036289215,
+      "q75": 0.9871388673782349,
+      "q90": 0.9895514667034149,
+      "q95": 0.9908348321914673,
+      "q99": 0.9927877110242843,
+      "std": 0.004485337214587732
+    },
+    "epoch": 40,
+    "eval_kl": 7.703165235398691,
+    "eval_recon_loss": 130.18213315553302,
+    "eval_total_loss": 137.88529958604258
+  },
+  "evaluation_sampling": "one pathwise posterior draw per observation",
+  "evaluation_seed": 0,
+  "final_checkpoint": {
+    "checkpoint_path": "experiments/mnist/outputs/benchmark/spcauchy/dim_2/seed_0/final_checkpoint.pt",
+    "concentration": {
+      "count": 10000,
+      "fraction_above_0_9": 1.0,
+      "max": 0.9948787689208984,
+      "mean": 0.9838362312853336,
+      "median": 0.9840288162231445,
+      "min": 0.9651827812194824,
+      "parameter": "rho",
+      "q25": 0.9807848036289215,
+      "q75": 0.9871388673782349,
+      "q90": 0.9895514667034149,
+      "q95": 0.9908348321914673,
+      "q99": 0.9927877110242843,
+      "std": 0.004485337214587732
+    },
+    "epoch": 40,
+    "eval_kl": 7.703165235398691,
+    "eval_recon_loss": 130.18213315553302,
+    "eval_total_loss": 137.88529958604258
+  },
+  "run_config": {
+    "activation": "relu",
+    "ambient_latent_dim": 3,
+    "batch_size": 128,
+    "config_schema_version": 2,
+    "decoder_type": "cnn",
+    "dropout_rate": 0.1,
+    "encoder_type": "cnn",
+    "epochs": 40,
+    "hidden_dims": [
+      32,
+      64,
+      128
+    ],
+    "kl_weight": 1.0,
+    "learning_rate": 0.0003,
+    "model_family": "spcauchy",
+    "notes": "Paper benchmark comparison on MNIST.",
+    "num_workers": 4,
+    "optimizer_name": "AdamW",
+    "power_scale_bias_init": 0.0,
+    "preset": "benchmark_comparison",
+    "reported_dim": 2,
+    "scheduler_factor": 0.5,
+    "scheduler_name": "ReduceLROnPlateau",
+    "scheduler_patience": 5,
+    "seed": 0,
+    "selection_metric": "eval_recon_loss",
+    "spcauchy_kl_method": "direct",
+    "tags": [
+      "benchmark",
+      "mnist"
+    ],
+    "warmup_steps": 200
+  }
+}

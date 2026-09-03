@@ -1,0 +1,7 @@
+python -m experiments.latent_layer.neighbor_validation --output-dir experiments/latent_layer/final/results --grid-size 12001
+python -m experiments.latent_layer.run accuracy --device cpu --out-dir experiments/latent_layer/final
+python -m experiments.latent_layer.run robustness --device cpu --timeout-s 5 --out-dir experiments/latent_layer/final
+python -m experiments.latent_layer.run runtime --device auto --warmup-iters 10 --measure-iters 50 --repeats 5 --direct-backend auto --laplace-backend auto --out-dir experiments/latent_layer/final
+python -m experiments.latent_layer.backend_profile --device cpu --output-dir experiments/latent_layer/final/results --warmups 10 --measurements 50 --repeats 5
+python -m experiments.latent_layer.backend_profile --device cuda --output-dir experiments/latent_layer/final/results --warmups 10 --measurements 50 --repeats 5
+python -m experiments.latent_layer.figures

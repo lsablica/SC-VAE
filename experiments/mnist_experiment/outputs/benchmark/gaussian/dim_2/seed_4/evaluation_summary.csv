@@ -1,3 +1,0 @@
-checkpoint_type,epoch,eval_total_loss,eval_recon_loss,eval_kl
-best_recon_checkpoint,38,140.40248272087,133.37230875522275,7.030173669887494
-final_checkpoint,40,140.55154631409465,133.59653009342242,6.955016637150245

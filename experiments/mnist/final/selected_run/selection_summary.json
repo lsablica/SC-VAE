@@ -1,0 +1,23 @@
+{
+  "checkpoint_path": "experiments/mnist/outputs/benchmark/spcauchy/dim_2/seed_0/best_recon_checkpoint.pt",
+  "selected_concentration": {
+    "count": 10000,
+    "fraction_above_0_9": 1.0,
+    "max": 0.9948787689208984,
+    "mean": 0.9838362312853336,
+    "median": 0.9840288162231445,
+    "min": 0.9651827812194824,
+    "q25": 0.9807848036289215,
+    "q75": 0.9871388673782349,
+    "q90": 0.9895514667034149,
+    "q95": 0.9908348321914673,
+    "q99": 0.9927877110242843,
+    "std": 0.004485337214587732
+  },
+  "selected_epoch": 40,
+  "selected_eval_kl": 7.703165235398691,
+  "selected_eval_recon_loss": 130.21469521824318,
+  "selected_eval_total_loss": 137.91786135902888,
+  "selection_metric": "eval_recon_loss",
+  "wall_clock_training_s": 195.87510690197814
+}

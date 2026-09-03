@@ -1,0 +1,25 @@
+{
+  "dimensions": {
+    "start": 7,
+    "step": 2,
+    "stop": 199
+  },
+  "grid_size": 12001,
+  "interior_refinement": "bounded_scalar",
+  "worst_laplace": {
+    "dimension": 7,
+    "laplace_max_abs_error": 0.03564157319331018,
+    "laplace_rho_at_max": 0.45590653504427814,
+    "laplace_to_neighbor_error_ratio": 32.416163243080476,
+    "neighbor_max_abs_error": 0.0010995000526756726,
+    "neighbor_rho_at_max": "1-"
+  },
+  "worst_neighbor": {
+    "dimension": 7,
+    "laplace_max_abs_error": 0.03564157319331018,
+    "laplace_rho_at_max": 0.45590653504427814,
+    "laplace_to_neighbor_error_ratio": 32.416163243080476,
+    "neighbor_max_abs_error": 0.0010995000526756726,
+    "neighbor_rho_at_max": "1-"
+  }
+}

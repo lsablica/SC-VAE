@@ -1,0 +1,123 @@
+{
+  "artifact_count": 23,
+  "artifacts": [
+    {
+      "bytes": 903,
+      "path": "commands.txt",
+      "sha256": "a50bafd80afd46bf6ab8d4adbce9bddfa5aa8d58364889b39380344218f98e7d"
+    },
+    {
+      "bytes": 221,
+      "path": "environment.txt",
+      "sha256": "d7c2529ec26136a74418efa59c9157ce408ccb00acdbe5ee5f098b40d575a3d1"
+    },
+    {
+      "bytes": 178008,
+      "path": "figures/benchmark_spcauchy_vs_vmf_stress.png",
+      "sha256": "3eb41cde8cdc64ea2c66aea89d2dff34befb9bb99318676a400cdee080ccc05f"
+    },
+    {
+      "bytes": 101011,
+      "path": "figures/direct_kl_odd_terms.png",
+      "sha256": "b8c11bb534c63827e480e33f25c6b55524917c3754fd5d9e2544cceca01ae817"
+    },
+    {
+      "bytes": 134985,
+      "path": "figures/kl_evaluation_summary.png",
+      "sha256": "3684e9f80d132845045437cc1e37d53d8ba60c41e570b2795ac8e5144767f47b"
+    },
+    {
+      "bytes": 162635,
+      "path": "figures/latent_step_runtime_forward_backward.png",
+      "sha256": "813f43f8fc2ca91340398248eb22a5409b068b11a841f09948132a5b9b7f50fe"
+    },
+    {
+      "bytes": 281347,
+      "path": "figures/matched_curvature_profiles.png",
+      "sha256": "57a8b020292ef95a3bec9882d2d49ada0eff0e49517ec1b16da950eba5b499a8"
+    },
+    {
+      "bytes": 193652,
+      "path": "figures/matched_curvature_survival.png",
+      "sha256": "98c4e9ed725865d6eaa700d4604c37914b846a597fe3f42fbe9ec2f5e4d989c7"
+    },
+    {
+      "bytes": 101059,
+      "path": "figures/robustness_spcauchy_heatmap.png",
+      "sha256": "f226159455a13143b6626b904d0fb3826296abb218d3de64ecde225ab14c7c34"
+    },
+    {
+      "bytes": 87644,
+      "path": "figures/robustness_vmf_heatmap.png",
+      "sha256": "3db7a2a02568363a3f6552707f5be6b3f976b229781e960dc725c8bd74e0d79c"
+    },
+    {
+      "bytes": 404,
+      "path": "results/direct_kl_accuracy_summary.csv",
+      "sha256": "05e5d6c874715027674195720ab09f56c141be78a1d6ffa25d37a81d7993db56"
+    },
+    {
+      "bytes": 900,
+      "path": "results/direct_kl_accuracy_summary.json",
+      "sha256": "16f8a19688e260f2a188ed0d2b83ad04eb9de0d106967f4eb471d6eb9894b3fd"
+    },
+    {
+      "bytes": 6246,
+      "path": "results/direct_kl_backend_profile_cpu.csv",
+      "sha256": "055b284a09fc38ddbff84070a2f8e856e85cda39059feb597268859efba80d4c"
+    },
+    {
+      "bytes": 8411,
+      "path": "results/direct_kl_backend_profile_cuda.csv",
+      "sha256": "b590a8ce5c89909fd6837a4e4695764904865560f8b353aeb41a808748f25837"
+    },
+    {
+      "bytes": 626,
+      "path": "results/direct_kl_backend_summary.csv",
+      "sha256": "3a6fae6f761160e715b694eb7b6183910da9c9ecc0ca62708412986e956f628c"
+    },
+    {
+      "bytes": 1036,
+      "path": "results/direct_kl_odd_term_counts.csv",
+      "sha256": "623ad60f88914c08c6da19091cb699ae97bb0a44b75275a71e06a261af150a97"
+    },
+    {
+      "bytes": 136552,
+      "path": "results/latent_step_runtime.csv",
+      "sha256": "1dc9218c028671da01b1fff2ac23660a6ccc4f87fa494f0532ef746040a3c4a6"
+    },
+    {
+      "bytes": 1732,
+      "path": "results/latent_step_runtime_summary.csv",
+      "sha256": "3837c8e081fbcf58adceb28bc0abe99bc30ee50044c27cebcab5a14e1d42fbca"
+    },
+    {
+      "bytes": 10110,
+      "path": "results/neighbor_approximation_errors.csv",
+      "sha256": "06b2eb9275a0932edf4bb659578abc6005b41d17d0b0fc14d6055ba3af694b35"
+    },
+    {
+      "bytes": 712,
+      "path": "results/neighbor_approximation_summary.json",
+      "sha256": "cf3a9abf510704e7ceed5915144a746f8841aac459b4b90c6bdeec4a367afb6a"
+    },
+    {
+      "bytes": 282753,
+      "path": "results/robustness_grid.csv",
+      "sha256": "7bc227df65f057e9c3a61c3c750f566aed1e3cb9ffa6f2b81eb012a1eec1d7c4"
+    },
+    {
+      "bytes": 286,
+      "path": "results/robustness_summary.csv",
+      "sha256": "c704dc1648885deb2b3f76a4d80d101bef2427e13ed6dfbe4414a6b74cfe63ab"
+    },
+    {
+      "bytes": 132716,
+      "path": "results/spcauchy_kl_accuracy.csv",
+      "sha256": "b9e3b18814fa269ca33d03a0f42a159499062bc483a45ba126bf5c67debd75d8"
+    }
+  ],
+  "experiment": "latent_layer",
+  "root": "experiments/latent_layer/final",
+  "schema_version": 1
+}

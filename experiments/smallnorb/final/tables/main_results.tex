@@ -1,0 +1,12 @@
+\begin{tabular}{lrrrrrr}
+\toprule
+Model & Gap NLL $\downarrow$ & Gap MSE $\downarrow$ & Observed NLL $\downarrow$ & Pose error $\downarrow$ & Spearman $\uparrow$ & Interp. MSE $\downarrow$ \\
+\midrule
+Isotropic Gaussian & 173.14 $\pm$ 2.77 & 0.00338 $\pm$ 0.00005 & 147.32 $\pm$ 2.29 & 151.69 $\pm$ 0.83 & -0.054 $\pm$ 0.009 & 0.00855 $\pm$ 0.00006 \\
+Power Spherical & 130.11 $\pm$ 2.71 & 0.00254 $\pm$ 0.00005 & 112.44 $\pm$ 2.16 & 148.11 $\pm$ 0.95 & \textbf{-0.014 $\pm$ 0.005} & 0.00839 $\pm$ 0.00014 \\
+Spherical Cauchy & \textbf{122.90 $\pm$ 1.05}$^\dagger$ & \textbf{0.00240 $\pm$ 0.00002}$^\dagger$ & \textbf{106.18 $\pm$ 0.88}$^\dagger$ & \textbf{146.76 $\pm$ 0.90} & -0.018 $\pm$ 0.005 & 0.00836 $\pm$ 0.00012 \\
+Robust vMF & 127.55 $\pm$ 1.10 & 0.00249 $\pm$ 0.00002 & 110.34 $\pm$ 0.48 & 147.73 $\pm$ 1.00 & -0.016 $\pm$ 0.007 & \textbf{0.00825 $\pm$ 0.00016} \\
+\bottomrule
+\end{tabular}
+\par\smallskip
+\footnotesize Bold marks the best seed mean. $^\dagger$ marks a significant paired difference from the next-best mean by a two-sided paired \(t\)-test at \(0.05\). Secondary endpoints use Benjamini--Hochberg correction across the displayed secondary metrics.

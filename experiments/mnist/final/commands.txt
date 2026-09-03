@@ -1,0 +1,5 @@
+python -m experiments.mnist.run_all --device cuda --output-root experiments/mnist/runs
+python -m experiments.mnist.aggregate --output-root experiments/mnist/runs
+python -m experiments.mnist.train --preset benchmark_comparison --models spcauchy --reported-dims 2 --seeds 0 --device cuda --epochs 40
+python -m experiments.mnist.generate_qualitative_figures --refresh-from-checkpoint --device cpu
+python -m experiments.mnist.generate_qualitative_figures

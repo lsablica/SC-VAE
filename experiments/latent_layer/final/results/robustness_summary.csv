@@ -1,0 +1,7 @@
+evaluations,failure_types,failures,family,kl_error_threshold_exceeded,method,successes
+81,,0,powerspherical,0,power_spherical,81
+216,,0,spcauchy,0,direct,216
+216,,0,spcauchy,146,laplace,216
+216,,0,spcauchy,7,neighbor,216
+81,non_finite,38,vmf,0,vmf_official,43
+81,,0,vmf,0,vmf_robust,81

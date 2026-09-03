@@ -1,0 +1,13 @@
+device,dimension,evaluator,fastest_backend,fastest_total_median_s
+cpu,8,direct,compiled,0.00018366900621913373
+cpu,128,direct,compiled,0.00019273452926427126
+cpu,2048,direct,compiled,0.0002947825123555958
+cpu,9,neighbor,compiled,0.00016877750749699771
+cpu,129,neighbor,compiled,0.00017902249237522483
+cpu,2049,neighbor,compiled,0.00026603598962537944
+cuda,8,direct,triton,0.0003342379932291806
+cuda,128,direct,triton,0.0003219479986000806
+cuda,2048,direct,triton,0.0003474644909147173
+cuda,9,neighbor,triton,0.0003368450270500034
+cuda,129,neighbor,triton,0.00033123651519417763
+cuda,2049,neighbor,triton,0.0003056580026168376

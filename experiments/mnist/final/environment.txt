@@ -1,0 +1,7 @@
+scientific_reference_commit=de3d9a3b07a294dc5243e0c6c84b274b322b0037
+python=3.12.3
+torch=2.10.0
+torchvision=0.25.0
+cuda_device=NVIDIA GeForce RTX 2070
+dataset=MNIST torchvision train/test split
+note=The selected checkpoint is local and ignored; its SHA256 and full run configuration are in qualitative_provenance.json.

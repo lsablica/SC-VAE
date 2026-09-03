@@ -1,8 +1,0 @@
-{
-  "checkpoint_path": "experiments/mnist_experiment/outputs/benchmark/spcauchy/dim_20/seed_2/best_recon_checkpoint.pt",
-  "selected_epoch": 37,
-  "selected_eval_kl": 27.35064436514166,
-  "selected_eval_recon_loss": 74.8097200997268,
-  "selected_eval_total_loss": 102.16036485116693,
-  "selection_metric": "eval_recon_loss"
-}

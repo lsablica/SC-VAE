@@ -1,0 +1,3 @@
+python -m experiments.contaminated_directional.run_all --device cuda --seeds 3 --steps 600 --batch-size 8192 --evaluation-samples 1000000
+python -m experiments.contaminated_directional.run_all --output experiments/contaminated_directional/final --device cuda --seeds 3 --steps 600 --batch-size 8192 --evaluation-samples 1000000
+python -m experiments.contaminated_directional.run_all --device cuda --seeds 3 --steps 600 --batch-size 8192 --evaluation-samples 1000000 --rerun

@@ -1,8 +1,0 @@
-{
-  "checkpoint_path": "experiments/mnist_experiment/outputs/benchmark/gaussian/dim_20/seed_4/best_recon_checkpoint.pt",
-  "selected_epoch": 40,
-  "selected_eval_kl": 23.407909224304973,
-  "selected_eval_recon_loss": 74.51115330563316,
-  "selected_eval_total_loss": 97.91906255408179,
-  "selection_metric": "eval_recon_loss"
-}
